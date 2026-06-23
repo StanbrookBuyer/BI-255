@@ -90,7 +90,7 @@ Access databases and datasets, journals, and research support from the Carl S. S
 ## Instructor {#instructor}
 
 ::: {.instructor-card}
-<div class="instructor-avatar">RS</div>
+<img src="images/headshot.jpg" alt="Photo of Dr. Rosie Stanbrook-Buyer" class="instructor-avatar" />
 
 ### Dr. Rosie Stanbrook-Buyer
 Assistant Professor, Department of Integrated Environmental Science & Natural Sciences
