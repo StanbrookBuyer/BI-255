@@ -1,0 +1,101 @@
+project:
+  type: website
+  output-dir: _site
+
+execute:
+  freeze: auto
+
+website:
+  title: "BI 255: Biological Data Science"
+  description: "Bethune-Cookman University · Fall 2026"
+  site-url: "https://bi255.netlify.app"
+  navbar:
+    background: dark
+    left:
+      - href: index.qmd
+        text: Home
+      - href: index.qmd#resources
+        text: Resources
+      - href: index.qmd#instructor
+        text: Instructor
+    right:
+      - icon: github
+        href: https://github.com/StanbrookBuyer/BI-255
+  sidebar:
+    style: docked
+    collapse-level: 1
+    contents:
+      - section: "Week 1"
+        contents:
+          - Lectures/W1/Lab1_Introduction.qmd
+          - Lectures/W1/Lab2_BasicBuildingBlocks.qmd
+      - section: "Week 2"
+        contents:
+          - Lectures/W2/Lab3_Sequences.qmd
+          - Lectures/W2/Lab4_VectorsMissingValues.qmd
+          - Lectures/W2/Lab5_DataFramesMatrices.qmd
+      - section: "Week 3"
+        contents:
+          - Lectures/W3/Lab6_Subsetting.qmd
+          - Lectures/W3/Lab7_DatesApply.qmd
+      - section: "Week 4"
+        contents:
+          - Lectures/W4/Lab8_HypothesisTesting.qmd
+          - Lectures/W4/Lab9_dplyr.qmd
+      - section: "Week 5"
+        contents:
+          - Lectures/W5/Lab10_FrequencyDataPoisson.qmd
+          - Lectures/W5/Lab11_HypothesisTesting.qmd
+      - section: "Week 6"
+        contents:
+          - Lectures/W6/Lab12_DataVisualization.qmd
+          - Lectures/W6/Lab13_ggplot2.qmd
+          - Lectures/W6/Lab14_ContingencyTables.qmd
+      - section: "Week 7"
+        contents:
+          - Lectures/W7/Lab15_NormalDistributionCLT.qmd
+          - Lectures/W7/Lab16_SamplingNormality.qmd
+      - section: "Week 8"
+        contents:
+          - Lectures/W8/Lab17_StripChartsViolinTtests.qmd
+          - Lectures/W8/Lab18_ConfidenceIntervalsLevene.qmd
+          - Lectures/W8/Lab19_ANOVATukey.qmd
+      - section: "Week 9"
+        contents:
+          - Lectures/W9/Lab20_KruskalWallisNonParametric.qmd
+          - Lectures/W9/Lab21_Correlation.qmd
+      - section: "Week 10"
+        contents:
+          - Lectures/W10/Lab22_SimpleLinearRegression.qmd
+          - Lectures/W10/Lab23_ContingencyTests.qmd
+          - Lectures/W10/Lab24_HardyWeinberg.qmd
+      - section: "Week 11"
+        contents:
+          - Lectures/W11/Lab25_MultipleRegression.qmd
+          - Lectures/W11/Lab26_SpeciesDiversityI.qmd
+      - section: "Week 12"
+        contents:
+          - Lectures/W12/Lab27_SpeciesDiversityII.qmd
+          - Lectures/W12/Lab28_Shiny.qmd
+          - Lectures/W12/Lab29_DoseResponse.qmd
+      - section: "Week 13"
+        contents:
+          - Lectures/W13/Lab30_SpatialMappingI.qmd
+      - section: "Week 14"
+        contents:
+          - Lectures/W14/Lab31_SpatialMappingII.qmd
+          - Lectures/W14/Lab33_SentimentAnalysis.qmd
+      - section: "Week 15"
+        contents:
+          - Lectures/W15/Lab34_PosterPrep.qmd
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    code-tools: true
+    highlight-style: github

@@ -1,0 +1,330 @@
+---
+title: "Lab 16: Sampling Properties & Assessing Normality"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "September 30, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Does Your Data Follow a Normal Distribution?
+
+Most parametric statistical tests (t-tests, ANOVA, regression) assume that the data — or at minimum the residuals from a model — follow a normal distribution. In practice, biological data often deviate from normality: assay measurements can be right-skewed, count data are discrete, and small samples show irregular patterns.
+
+This lab gives you the tools to formally assess normality, understand what happens when it fails, and choose appropriate transformations or alternatives.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Explain sampling variation and the role of the standard error
+2. Construct and interpret a QQ plot with `qqnorm()` and `qqline()`
+3. Apply the Shapiro-Wilk test with `shapiro.test()`
+4. Recognise common patterns of non-normality: skewness, heavy tails, bimodality
+5. Apply a log transformation to right-skewed biological data
+6. Know when parametric tests remain valid despite non-normality
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Sampling Variation and Standard Error
+
+When you measure a quantity from a sample, the sample mean is an **estimate** of the true population mean. Different samples from the same population will give different estimates. The **standard error** (SE) quantifies this variability.
+
+```{r}
+set.seed(42)
+
+# Simulate a population: serum CRP (C-reactive protein, mg/L) in healthy adults
+# CRP is right-skewed — use log-normal approximation
+crp_population <- rlnorm(100000, meanlog = 0.8, sdlog = 0.6)
+
+cat("Population mean CRP:   ", round(mean(crp_population), 2), "mg/L\n")
+cat("Population median CRP: ", round(median(crp_population), 2), "mg/L\n")
+cat("Population SD CRP:     ", round(sd(crp_population),   2), "mg/L\n")
+```
+
+```{r}
+# Draw 10 samples of n = 25 and show how means vary
+sample_means <- replicate(10, mean(sample(crp_population, 25)))
+round(sample_means, 2)
+```
+
+```{r}
+cat("Mean of sample means:", round(mean(sample_means), 2), "\n")
+cat("SD of sample means (empirical SE):", round(sd(sample_means), 2), "\n")
+cat("Theoretical SE (sigma/sqrt(n)):   ",
+    round(sd(crp_population) / sqrt(25), 2), "\n")
+```
+
+::: callout-note
+## Three Different Quantities
+
+| Quantity | Formula | What it measures |
+|----------|---------|-----------------|
+| Standard deviation (SD) | √[Σ(x−x̄)²/(n−1)] | Spread of individual observations |
+| Standard error (SE) | SD / √n | Precision of the sample mean |
+| 95% confidence interval | x̄ ± 1.96 × SE | Plausible range for the true mean |
+
+A common error in published papers: using SE to make error bars look narrower than they should be. Always state whether your error bars represent SD or SE.
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: QQ Plots — Visualising Normality
+
+A **quantile-quantile (QQ) plot** compares the quantiles of your data to what those quantiles would be under a normal distribution. If the data are normal, the points fall on a straight line.
+
+```{r}
+# Generate three datasets with different distributional shapes
+set.seed(123)
+normal_data    <- rnorm(80, mean = 50, sd = 10)
+right_skewed   <- rexp(80, rate = 0.05)          # right-skewed (exponential)
+heavy_tails    <- rt(80, df = 3)                 # heavy-tailed (t with low df)
+
+par(mfrow = c(2, 3), mar = c(4, 4, 3, 1))
+
+# Histograms
+hist(normal_data,  col = "#2C5F8A", border = "white", main = "Normal", xlab = "")
+hist(right_skewed, col = "#5B8DB8", border = "white", main = "Right-skewed", xlab = "")
+hist(heavy_tails,  col = "#A8C4D9", border = "white", main = "Heavy tails", xlab = "")
+
+# QQ plots
+qqnorm(normal_data,  main = "QQ — Normal",       pch = 16, cex = 0.6, col = "#2C5F8A")
+qqline(normal_data,  col = "#C8102E", lwd = 2)
+
+qqnorm(right_skewed, main = "QQ — Right-skewed", pch = 16, cex = 0.6, col = "#5B8DB8")
+qqline(right_skewed, col = "#C8102E", lwd = 2)
+
+qqnorm(heavy_tails,  main = "QQ — Heavy tails",  pch = 16, cex = 0.6, col = "#A8C4D9")
+qqline(heavy_tails,  col = "#C8102E", lwd = 2)
+
+par(mfrow = c(1, 1))
+```
+
+::: callout-important
+## Reading a QQ Plot
+
+| Pattern | What it means |
+|---------|--------------|
+| Points on the line | Data are approximately normal |
+| Curve bending upward (S-shape, top-right) | Right-skewed distribution |
+| Curve bending downward (S-shape, top-left) | Left-skewed distribution |
+| Points fan out at both ends | Heavy tails (more extreme values than normal) |
+| Points cluster at the ends | Light tails |
+
+The QQ plot is subjective — you are looking for systematic deviations from the line, not random scatter around it.
+:::
+
+------------------------------------------------------------------------
+
+## Part 3: The Shapiro-Wilk Test
+
+For a formal test of normality, use the **Shapiro-Wilk test**. It tests H₀: the data come from a normal distribution.
+
+```{r}
+# Apply Shapiro-Wilk to our three datasets
+shapiro.test(normal_data)
+```
+
+```{r}
+shapiro.test(right_skewed)
+```
+
+```{r}
+shapiro.test(heavy_tails)
+```
+
+::: callout-warning
+## Limitations of the Shapiro-Wilk Test
+
+The Shapiro-Wilk test has two important limitations:
+
+1. **Large samples always reject H₀** — with n > 200, even tiny, biologically irrelevant deviations from normality produce significant p-values. The test is too sensitive for large datasets.
+
+2. **Small samples rarely reject H₀** — with n < 20, the test has low power and will fail to detect even moderately non-normal data.
+
+Best practice: **always look at the QQ plot** as well as the test. The combination of visual assessment and formal test gives a more complete picture than either alone.
+:::
+
+### Biological Data: Cytokine Concentrations
+
+Cytokines (immune signalling proteins) are typically measured at very low concentrations with a few extremely high values — a classic right-skewed distribution seen in immunology research.
+
+```{r}
+set.seed(77)
+# Simulated IL-6 concentrations (pg/mL) in patients with varying inflammation
+il6 <- rlnorm(50, meanlog = 2.1, sdlog = 1.0)
+
+par(mfrow = c(1, 2))
+hist(il6, col = "#2C5F8A", border = "white",
+     xlab = "IL-6 (pg/mL)", main = "Raw IL-6 Concentrations")
+qqnorm(il6, pch = 16, cex = 0.7, col = "#2C5F8A", main = "QQ Plot — Raw IL-6")
+qqline(il6, col = "#C8102E", lwd = 2)
+par(mfrow = c(1, 1))
+```
+
+```{r}
+shapiro.test(il6)
+```
+
+------------------------------------------------------------------------
+
+## Part 4: Log Transformation
+
+When biological data are right-skewed (as is common for concentrations, enzyme activities, and species abundances), a **log transformation** often produces a more symmetric, approximately normal distribution.
+
+```{r}
+log_il6 <- log(il6)   # Natural logarithm; use log10() for base-10
+
+par(mfrow = c(1, 2))
+hist(log_il6, col = "#5B8DB8", border = "white",
+     xlab = "log(IL-6) (pg/mL)", main = "Log-Transformed IL-6")
+qqnorm(log_il6, pch = 16, cex = 0.7, col = "#5B8DB8",
+       main = "QQ Plot — log(IL-6)")
+qqline(log_il6, col = "#C8102E", lwd = 2)
+par(mfrow = c(1, 1))
+```
+
+```{r}
+shapiro.test(log_il6)
+```
+
+::: callout-tip
+## Why Log-Transform?
+
+Many biological quantities follow **log-normal distributions** — i.e., their logarithms follow a normal distribution. This is common for:
+
+- Protein and cytokine concentrations
+- Bacterial colony counts
+- Gene expression values (RNA-seq log2 CPM)
+- Pharmacokinetic parameters (Cmax, AUC)
+- Species abundance data
+
+After log transformation, you can apply parametric tests normally and then back-transform results to the original scale for reporting.
+
+Back-transform with `exp()` if you used `log()`, or `10^x` if you used `log10()`.
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: When Can You Ignore Non-Normality?
+
+```{r}
+# Demonstrate: t-test is robust to moderate non-normality due to the CLT
+set.seed(500)
+
+# Two right-skewed groups (enzyme activity under two growth conditions)
+group_A <- rexp(40, rate = 0.1)   # Mean = 10
+group_B <- rexp(40, rate = 0.08)  # Mean = 12.5
+
+par(mfrow = c(1, 2))
+hist(group_A, col = "#2C5F8A50", breaks = 15, main = "Group A (skewed)", xlab = "")
+hist(group_B, col = "#C8102E50", breaks = 15, main = "Group B (skewed)", xlab = "")
+par(mfrow = c(1, 1))
+```
+
+```{r}
+# t-test on non-normal data — still reasonable at n = 40 due to CLT
+t.test(group_A, group_B)
+```
+
+::: callout-note
+## When Parametric Tests Are Still Valid
+
+Parametric tests (t-tests, ANOVA) require that the **sampling distribution of the mean** is approximately normal — not necessarily that the raw data are normal. Due to the CLT:
+
+- For **n ≥ 30**, parametric tests are generally robust to skewness
+- For **n < 20**, normality is more important to check carefully
+- For **heavily non-normal data at small n**: use non-parametric alternatives (Lab 20)
+
+The key insight: it is the distribution of **means**, not raw values, that needs to be approximately normal.
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** On a QQ plot, you observe that the points form a curve that bends upward to the right (the top-right points fall above the line). This indicates:
+
+    a) Left-skewed data    b) Right-skewed data    c) Heavy-tailed data    d) Normal data with outliers
+
+**2.** You apply `shapiro.test()` to a dataset of 500 observations and get p = 0.02. What is the most important caution about interpreting this result?
+
+**3.** A researcher measures serum triglycerides (mg/dL) and finds the data are right-skewed (W = 0.87, p = 0.003). What transformation should they try first?
+
+    a) Square root    b) Reciprocal (1/x)    c) Log    d) Squaring (x²)
+
+**4.** You have two samples of n = 35 from a skewed population. A colleague says you cannot run a t-test because the data are not normal. Are they correct?
+
+**5.** True or False: The standard error of the mean will always be smaller than the standard deviation of the same sample.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) Right-skewed data — In a right-skewed distribution, there are more extreme large values than the normal distribution predicts. On a QQ plot these appear as points above the reference line in the top-right, creating an upward curve. A "banana" shape bending upward = right skew.
+
+**2.** With n = 500, the Shapiro-Wilk test is so sensitive that it detects trivially small deviations from normality that have no practical consequence for parametric tests. A significant p-value here does **not** mean parametric tests are inappropriate — always inspect the QQ plot and consider whether the deviation is biologically meaningful.
+
+**3.** c) Log transformation — The log (or log10) transformation is the standard first attempt for right-skewed biological data such as concentrations, counts, and ratios. It compresses the right tail and often produces an approximately normal distribution.
+
+**4.** No, they are not correct — with n = 35 per group, the Central Limit Theorem ensures that the sampling distribution of the mean is approximately normal even from a skewed population. The t-test is robust to this degree of non-normality at this sample size. They should still inspect QQ plots and consider a non-parametric alternative if skewness is extreme.
+
+**5.** **True** — SE = SD / √n. Since √n > 1 for any n > 1, the SE is always smaller than the SD. The more observations you have, the smaller the SE — reflecting greater precision in estimating the population mean.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 16 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Explain the difference between SD, SE, and a confidence interval
+- [ ] Produce a QQ plot with `qqnorm()` and `qqline()` and interpret its shape
+- [ ] Run `shapiro.test()` and state the null hypothesis being tested
+- [ ] Recognise the limitations of the Shapiro-Wilk test at large and small sample sizes
+- [ ] Apply `log()` to right-skewed data and verify the transformation improved normality
+- [ ] Explain why parametric tests are often valid for n ≥ 30 even with non-normal data
+
+::: callout-tip
+## Bonus Challenge
+
+Find a real dataset of your choice (CDC public health data, a published biology paper's supplementary table, or the `datasets` package in R: try `data(airquality)`). Choose a continuous variable, assess its normality with a QQ plot and Shapiro-Wilk test, apply an appropriate transformation if needed, and reassess. Write a paragraph describing your findings and whether a parametric test would be appropriate.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Quiz Friday, then Week 8)
+
+- **Friday: Quiz 4** — covers the normal distribution, CLT, sampling properties, and assessing normality (Labs 15–16)
+- After the quiz, **Week 8** covers t-tests and ANOVA — be confident with the CLT and QQ plots before then
+- Read **R for Data Science Ch. 9–10**
+
+------------------------------------------------------------------------

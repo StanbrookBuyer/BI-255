@@ -1,0 +1,321 @@
+---
+title: "Lab 31: Spatial Mapping in R — Part II"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "November 16, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Making Maps Interactive
+
+Static maps are essential for publications. Interactive maps are more powerful for exploration — you can zoom, pan, click on features to see metadata, and share the map as a URL anyone can open in a browser. The **leaflet** package brings the widely-used Leaflet.js mapping library into R.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Build an interactive map with `leaflet` and add tile layers
+2. Add points, polygons, and popups to a leaflet map
+3. Create a heatmap from occurrence point density
+4. Perform a spatial join to count points within polygons using `sf`
+5. Add a colour-scaled legend to a choropleth layer in leaflet
+6. Save a leaflet map as a standalone HTML file
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Your First leaflet Map
+
+```{r}
+# install.packages("leaflet")
+library(leaflet)
+library(sf)
+library(dplyr)
+library(rnaturalearth)
+library(rnaturalearthdata)
+
+# BCU campus location — a sensible starting point for the map
+bcu_lat  <-  29.2167
+bcu_lng  <- -81.0172
+
+# Minimal leaflet map
+m <- leaflet() |>
+  addTiles() |>                          # Default OpenStreetMap tiles
+  setView(lng = bcu_lng, lat = bcu_lat, zoom = 12) |>
+  addMarkers(lng = bcu_lng, lat = bcu_lat,
+             popup = "Bethune-Cookman University")
+
+m   # Displays in the Viewer pane in Posit Cloud
+```
+
+::: callout-tip
+## Leaflet Tile Providers
+
+Different map tile layers emphasise different features:
+
+| Provider | Good for |
+|----------|---------|
+| `addTiles()` | OpenStreetMap — general purpose, roads and cities |
+| `addProviderTiles("Esri.WorldImagery")` | Satellite imagery |
+| `addProviderTiles("CartoDB.Positron")` | Clean background for data overlays |
+| `addProviderTiles("Stadia.StamenTerrain")` | Terrain / topography |
+
+See all providers at: `leaflet::providers` or leaflet-extras.github.io/leaflet-providers/preview/
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: Adding Biological Occurrence Data
+
+```{r}
+set.seed(42)
+# Rebuild the manatee occurrence data from Lab 30
+manatee_df <- data.frame(
+  longitude = c(runif(50, -83, -79.5), runif(30, -81, -79),
+                runif(20, -77, -75),   runif(15, -86, -83),
+                runif(10, -64, -61)),
+  latitude  = c(runif(50, 24, 30),    runif(30, 24, 26),
+                runif(20, 22, 26),     runif(15, 25, 30),
+                runif(10, 9, 12)),
+  year      = sample(2015:2024, 125, replace = TRUE),
+  source    = sample(c("Aerial survey", "Citizen science", "GPS tag"),
+                     125, replace = TRUE, prob = c(0.5, 0.35, 0.15)),
+  individual = paste0("Manatee_", sprintf("%03d", 1:125))
+)
+
+# Colour palette for data source
+source_colours <- c("Aerial survey"   = "#2C5F8A",
+                    "Citizen science" = "#C8102E",
+                    "GPS tag"         = "#5B8DB8")
+
+manatee_df$colour <- source_colours[manatee_df$source]
+
+# Build interactive map
+leaflet(manatee_df) |>
+  addProviderTiles("CartoDB.Positron") |>
+  setView(lng = -78, lat = 25, zoom = 5) |>
+  addCircleMarkers(
+    lng    = ~longitude,
+    lat    = ~latitude,
+    color  = ~colour,
+    radius = 5,
+    fillOpacity = 0.8,
+    stroke = FALSE,
+    popup  = ~paste0("<b>", individual, "</b><br>",
+                     "Year: ", year, "<br>",
+                     "Source: ", source)
+  ) |>
+  addLegend(
+    position = "bottomright",
+    colors   = unname(source_colours),
+    labels   = names(source_colours),
+    title    = "Data Source"
+  )
+```
+
+::: callout-note
+## Popup HTML
+
+The `popup` argument accepts HTML strings. Use `<b>` for bold, `<br>` for line breaks. This lets you include species name, date, observer, or any other metadata when a user clicks a point.
+:::
+
+------------------------------------------------------------------------
+
+## Part 3: Spatial Join — Counting Points Within Polygons
+
+A **spatial join** is one of the most powerful operations in GIS. It links each occurrence point to the country or protected area it falls within, allowing you to count occurrences per region.
+
+```{r}
+# Convert occurrence data to sf
+manatee_sf <- st_as_sf(manatee_df,
+                        coords = c("longitude", "latitude"),
+                        crs    = 4326)
+
+# Get country polygons for the region
+world_sf <- ne_countries(scale = "medium", returnclass = "sf")
+
+# Spatial join: assign each manatee point the country it falls in
+manatee_joined <- st_join(manatee_sf, world_sf[, c("name_long", "iso_a3")],
+                           join = st_within)
+
+# Count occurrences per country
+occ_by_country <- manatee_joined |>
+  st_drop_geometry() |>
+  group_by(name_long) |>
+  summarise(n_records = n(), .groups = "drop") |>
+  arrange(desc(n_records))
+
+print(occ_by_country)
+```
+
+```{r}
+# Join counts back to map polygons for choropleth
+carib_counts <- world_sf |>
+  left_join(occ_by_country, by = "name_long") |>
+  filter(!is.na(n_records))
+
+# Static choropleth with occurrence counts
+library(ggplot2)
+ggplot(world_sf) +
+  geom_sf(fill = "grey90", colour = "white", linewidth = 0.2) +
+  geom_sf(data = carib_counts, aes(fill = n_records),
+          colour = "white", linewidth = 0.3) +
+  scale_fill_gradient(low = "#A8C4D9", high = "#1A3D5C",
+                      name = "Records") +
+  coord_sf(xlim = c(-90, -58), ylim = c(7, 33)) +
+  labs(title = "Manatee Occurrence Records by Country",
+       subtitle = "Simulated data for teaching purposes") +
+  theme_void()
+```
+
+------------------------------------------------------------------------
+
+## Part 4: Interactive Choropleth with Leaflet
+
+```{r}
+# Colour palette for choropleth
+pal <- colorNumeric(
+  palette = c("#A8C4D9", "#2C5F8A", "#1A3D5C"),
+  domain  = carib_counts$n_records,
+  na.color = "grey90"
+)
+
+# Interactive choropleth
+leaflet(carib_counts) |>
+  addProviderTiles("CartoDB.Positron") |>
+  addPolygons(
+    fillColor   = ~pal(n_records),
+    fillOpacity = 0.8,
+    color       = "white",
+    weight      = 1,
+    popup       = ~paste0("<b>", name_long, "</b><br>",
+                          "Occurrence records: ", n_records)
+  ) |>
+  addLegend(
+    pal      = pal,
+    values   = ~n_records,
+    position = "bottomright",
+    title    = "Manatee Records"
+  ) |>
+  setView(lng = -75, lat = 20, zoom = 4)
+```
+
+------------------------------------------------------------------------
+
+## Part 5: Saving a Leaflet Map as HTML
+
+```{r, eval=FALSE}
+# Save the interactive map as a standalone HTML file
+# The file can be opened in any browser or shared via email/Canvas
+library(htmlwidgets)
+
+my_map <- leaflet(manatee_df) |>
+  addProviderTiles("CartoDB.Positron") |>
+  addCircleMarkers(lng = ~longitude, lat = ~latitude,
+                   color = ~colour, radius = 5,
+                   popup = ~paste0(individual, " (", year, ")"))
+
+saveWidget(my_map,
+           file        = "manatee_map.html",
+           selfcontained = TRUE)   # All assets embedded in one file
+```
+
+::: callout-tip
+## When to Use Static vs Interactive Maps
+
+| Purpose | Use |
+|---------|-----|
+| Journal article, thesis, poster | Static map (`ggplot2 + geom_sf`) |
+| Exploring data, checking for errors | Interactive leaflet map |
+| Sharing with non-R users via browser | Interactive leaflet (save as HTML) |
+| Real-time data or web app | Leaflet inside a Shiny app |
+
+For your course poster presentation (Lab 34), use a static ggplot2 map. For your own exploratory analysis and data quality checks, leaflet is faster and more informative.
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** In a leaflet map, what does `addTiles()` do and what alternative tile providers are available?
+
+**2.** You want each marker on your leaflet map to show the species name and observation date when clicked. Which argument of `addCircleMarkers()` controls this?
+
+    a) `label`    b) `tooltip`    c) `popup`    d) `title`
+
+**3.** What is a spatial join, and what R function from the `sf` package performs it?
+
+**4.** In a leaflet choropleth, `colorNumeric()` creates a colour palette. What argument maps the numeric variable to a colour range?
+
+**5.** True or False: A leaflet map saved with `saveWidget(selfcontained = TRUE)` requires an internet connection to display in a browser.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** `addTiles()` adds the default **OpenStreetMap** map tiles as a background layer — the familiar street map. Alternative providers include: `addProviderTiles("Esri.WorldImagery")` for satellite imagery, `addProviderTiles("CartoDB.Positron")` for a clean minimal grey background (good for data overlays), and `addProviderTiles("Stadia.StamenTerrain")` for topographic terrain. See all options with `names(providers)`.
+
+**2.** c) `popup` — the `popup` argument accepts a character string or HTML string that is displayed when a user clicks the marker. `label` (option a) creates a tooltip that appears on hover rather than click. Both are useful but `popup` is for click-activated information.
+
+**3.** A spatial join links each feature in one spatial layer to features in another layer based on their **geographic relationship** (e.g., which country a point falls within, which protected areas overlap a species range). In R, `st_join(points_sf, polygons_sf, join = st_within)` assigns each point the attributes of the polygon it falls within.
+
+**4.** The `domain` argument: `colorNumeric(palette = ..., domain = data$variable)` tells the palette function the range of numeric values to map to colours. The domain sets the minimum and maximum values that will be mapped to the two ends of the colour gradient.
+
+**5.** False — `selfcontained = TRUE` embeds all JavaScript, CSS, and data directly inside the HTML file. The resulting file is **larger** but can be opened in any browser completely offline — no internet connection required. Without `selfcontained = TRUE`, the HTML file references external scripts that need an internet connection to load.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 31 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Build a leaflet map with `leaflet()`, `addTiles()`, and `setView()`
+- [ ] Add point markers with `addCircleMarkers()` including colour and popup information
+- [ ] Perform a spatial join with `st_join()` to link points to polygon attributes
+- [ ] Summarise occurrence counts per country/polygon using `group_by()` and `summarise()`
+- [ ] Create an interactive choropleth using `addPolygons()` with a `colorNumeric()` palette
+- [ ] Save a leaflet map as a standalone HTML file with `saveWidget(selfcontained = TRUE)`
+
+::: callout-tip
+## Bonus Challenge
+
+The `leaflet.extras` package adds heatmap functionality. Install it and try `addHeatmap(lng = ~longitude, lat = ~latitude, intensity = 1, blur = 20, max = 0.05, radius = 15)` on the manatee data. A heatmap shows density of points and is more informative than overlapping markers when you have many records in a small area. Adjust the `blur` and `radius` parameters and describe how they affect the appearance.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Friday)
+
+- Friday (Lab 33): Text as data — sentiment analysis of song lyrics using the tidytext package
+- The Data Science & Ethics lab (Lab 32) is self-directed reading — see Canvas for the assigned materials and reflection prompt
+
+------------------------------------------------------------------------

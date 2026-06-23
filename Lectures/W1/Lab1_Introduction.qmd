@@ -1,0 +1,319 @@
+---
+title: "Lab 1: Welcome to Biological Data Science"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "August 17, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Welcome to BI 255!
+
+Imagine you're the data analyst for the **Kansas City Chiefs**. Your job: figure out which players are performing best, which games show unusual patterns, and how weather affects scoring. Every one of those questions is answered with data — and the tool most scientists and analysts use to do it is called **R**.
+
+This course teaches you R. Not because it's easy (though it gets easier fast), but because it is the most powerful free tool available for analyzing biological and scientific data.
+
+By the end of this semester you will be able to:
+
+- Write real code that cleans, analyzes, and visualizes data
+- Apply statistical tests used in biology research
+- Build maps and interactive apps
+- Present your findings like a professional scientist
+
+------------------------------------------------------------------------
+
+## Part 1: What is R, and Why Should You Care?
+
+**R** is a programming language designed specifically for data analysis and statistics. It is:
+
+- **Free and open source** — anyone in the world can use it
+- **Powerful** — used by biologists, doctors, data scientists, and sports analysts
+- **In demand** — knowing R is a job skill listed in thousands of positions
+
+::: callout-note
+## Fun Fact
+
+R is used by the NFL, NBA, CDC, NASA, and almost every major research university. The same tool you learn in this class is used by professional analysts every day.
+:::
+
+**Posit Cloud** is the website where you will write and run R code. Think of it as a Google Doc, but for code. You don't need to install anything.
+
+------------------------------------------------------------------------
+
+## Part 2: Setting Up Posit Cloud
+
+Follow these steps to get started:
+
+1.  Go to [**posit.cloud**](https://posit.cloud)
+2.  Click **Sign Up** and create a [free]{.underline} account (use your B-CU email)
+3.  Once logged in, click **New Project → New RStudio Project**
+4.  You should see a screen with three panels — this is your workspace
+
+::: callout-tip
+## The RStudio Layout
+
+| Panel               | Location     | What it does                       |
+|---------------------|--------------|------------------------------------|
+| **Console**         | Bottom left  | Where R runs your code immediately |
+| **Source / Editor** | Top left     | Where you write and save scripts   |
+| **Environment**     | Top right    | Shows variables you've created     |
+| **Files / Plots**   | Bottom right | Shows your files and any graphs    |
+
+You'll use all four panels in this course!
+:::
+
+------------------------------------------------------------------------
+
+## Part 3: Your First R Commands
+
+Click in the **Console** (bottom left panel) and type exactly what you see below after the `>` symbol, then press **Enter**.
+
+### R as a Calculator
+
+```{r}
+# Adding two numbers
+2 + 2
+```
+
+```{r}
+# More math operations
+10 - 3
+4 * 6
+20 / 4
+2^3   # 2 to the power of 3
+```
+
+::: callout-note
+## What is a `#` symbol?
+
+The `#` symbol creates a **comment** — R ignores everything after it on that line. Comments are notes you write to yourself (or your professor!) to explain what your code does. Always comment your code.
+:::
+
+### NFL Scoring Example
+
+Let's use some real data. The Kansas City Chiefs scored these points across four games last season:
+
+```{r}
+# Points scored by the Kansas City Chiefs
+27 + 20 + 34 + 17
+```
+
+```{r}
+# What was their average score?
+(27 + 20 + 34 + 17) / 4
+```
+
+::: callout-tip
+## Try It Yourself
+
+What if they scored 31 in a fifth game? Change the code above to include that score and recalculate the average. Click in the console and try it!
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: What is Quarto?
+
+The document you are reading right now was made in **Quarto**. Quarto is a system that lets you combine:
+
+- Written text (like a lab report)
+- R code
+- The output and plots that code produces
+
+...all in one beautiful document that you can export as a webpage, PDF, or Word file.
+
+::: callout-important
+## All your work this Semester will be Quarto documents
+
+When you submit your work, you will render your Quarto file and submit the HTML output. This means your code, your explanations, and your results are all in one place.
+:::
+
+### Anatomy of a Quarto Document
+
+A Quarto file (`.qmd`) has three parts:
+
+**1. The YAML Header** — controls the document's appearance (the stuff between the `---` dashes at the very top)
+
+**2. Text sections** — written in Markdown (plain text with simple formatting symbols)
+
+**3. Code chunks** — blocks of R code surrounded by triple backticks (this is backtick \`)
+
+Here is what a code chunk looks like:
+
+```{{{r}}}
+# Your R code goes here
+2 + 2
+```
+
+The output appears directly below it when you **Render** the document.
+
+::: callout-tip
+## Keyboard Shortcut
+
+To insert a new code chunk in Quarto, press **Ctrl + Alt + I** (Windows) or **Cmd + Option + I** (Mac).
+
+To run code inside a chunk, press **Ctrl + Enter** (Windows) or **Cmd + Enter** (Mac).
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: Create Your First Quarto Document
+
+Let's build one together.
+
+1.  In Posit Cloud, click **File → New File → Quarto Document**
+2.  Give it a title: `"My First BI 255 Lab"`
+3.  Choose **HTML** as the output format
+4.  Click **Create**
+
+You'll see a template document. **Delete everything below the YAML header** (the `---` section at the top) and replace it with this:
+
+``` markdown
+## About Me
+
+My name is [YOUR NAME] and I am taking BI 255.
+
+I am interested in biology because...
+
+## My First Calculation
+
+Here is my first R code:
+```
+
+Then add a code chunk below it with this information:
+
+```{r}
+# My favorite NFL team's last 3 scores
+score_1 <- 24
+score_2 <- 31
+score_3 <- 17
+
+# Calculate the average
+average_score <- (score_1 + score_2 + score_3) / 3
+average_score
+```
+
+::: callout-note
+## What is `<-`?
+
+The `<-` symbol is called the **assignment operator**. It stores a value into a named variable. Think of it like putting something into a labeled box:
+
+`score_1 <- 24` means "create a box called `score_1` and put the number 24 inside it."
+
+You can then use `score_1` anywhere in your code and R will remember it equals 24.
+:::
+
+5.  Click the **Render** button (blue arrow at the top) to generate your HTML document
+6.  It should open in a new tab — you just made your first data science document!
+
+------------------------------------------------------------------------
+
+## Part 6: Saving and Organizing Your Work
+
+::: callout-important
+## Always Save Your Work!
+
+Posit Cloud saves automatically, but get in the habit of pressing **Ctrl+S** (or **Cmd+S**) frequently. Name your files clearly — for example, `Lab1_LabTopic.qmd`.
+:::
+
+Good file naming habits:
+
+- `Lab1_Introclass.qmd`
+- `BI255_Lab1_Sept17.qmd`
+- `untitled.qmd` (avoid)
+- `final_FINAL_v3.qmd` (avoid)
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** What symbol do you use in R to assign a value to a variable?
+
+    a) `=>`    b) `<-`    c) `==`    d) `->`
+
+**2.** In R, what does the `#` symbol do?
+
+    a) Multiplies two numbers    b) Marks the start of a comment    c) Creates a new variable    d) Closes a code chunk
+
+**3.** True or False: You need to pay for software to use R and Posit Cloud in this course.
+
+**4.** What file extension do Quarto documents use?
+
+    a) `.r`    b) `.html`    c) `.qmd`    d) `.doc`
+
+**5.** You type `(27 + 31 + 14) / 3` in the R console and press Enter. What does R calculate?
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) `<-` — The assignment operator. You can also use `=` but `<-` is the convention in R.
+
+**2.** b) Marks the start of a comment — R ignores everything after `#` on that line.
+
+**3.** **False** — R is free and open source. Posit Cloud has a free tier that is sufficient for this course.
+
+**4.** c) `.qmd` — Quarto Markdown files use the `.qmd` extension.
+
+**5.** `24` — This is the average of three NFL game scores: (27 + 31 + 14) ÷ 3 = 72 ÷ 3 = 24.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 1 Checklist
+
+Before you leave today, make sure you have:
+
+- [ ] Created a Posit Cloud account
+- [ ] Run your first arithmetic commands in the Console
+- [ ] Created a new Quarto document
+- [ ] Added text and a code chunk to your document
+- [ ] Successfully rendered the document to HTML
+- [ ] Saved your file with a clear name
+
+::: callout-tip
+## Bonus Challenge
+
+Look up the current season scoring stats for **your favorite NFL or NBA team**. Add a new code chunk to your Quarto document that stores three of their recent game scores and calculates the average. Render it and show your instructor!
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class
+
+- Make sure you can log in to Posit Cloud from home
+- Read **Chapter 2 of Intro2r** (link on Canvas)
+
+::: callout-note
+## Where to Find the Textbook
+
+All textbooks for this course are **free online**. Go to Canvas → Syllabus → Course Materials to find the links. You never need to buy a textbook for this class.
+:::
+
+------------------------------------------------------------------------

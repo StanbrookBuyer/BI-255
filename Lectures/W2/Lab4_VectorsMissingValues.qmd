@@ -1,0 +1,376 @@
+---
+title: "Lab 4: Vectors & Missing Values"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "August 26, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Vectors & Missing Data in the NFL
+
+Real data is messy. Players get injured and miss games. Stats aren't always recorded. Measurement errors happen. In the NFL, a quarterback might play 14 of 17 games — the other 3 are `NA` (Not Available) in your dataset.
+
+Today we learn how to build **vectors** properly and how to handle the inevitable **missing values** that appear in real biological and sports data.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Build and name vectors using `c()` and `names()`
+2. Understand what `NA` means and why it matters
+3. Use `is.na()` to detect missing values
+4. Use `na.rm = TRUE` to calculate statistics despite missing data
+5. Replace or remove `NA` values
+6. Perform vector arithmetic
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Building Vectors Properly
+
+A **vector** is R's most fundamental data structure — a sequence of values all of the **same type**.
+
+```{r}
+# Patrick Mahomes' passing yards per game, 2024 season (first 10 games)
+mahomes_yards <- c(267, 331, 198, 312, 279, 290, 341, 188, 255, 320)
+mahomes_yards
+```
+
+```{r}
+# Basic information about the vector
+length(mahomes_yards)   # How many elements?
+class(mahomes_yards)    # What type?
+```
+
+### Named Vectors
+
+You can label each element in a vector, which makes your data much more readable:
+
+```{r}
+# Give each value a name corresponding to the opponent
+opponents <- c("BAL", "CIN", "ATL", "LAC", "NO",
+               "LV", "TB", "DEN", "CAR", "LV")
+
+names(mahomes_yards) <- opponents
+mahomes_yards
+```
+
+```{r}
+# Now you can see which game each number belongs to
+# Access by name
+mahomes_yards["BAL"]
+mahomes_yards["TB"]
+```
+
+::: callout-tip
+## Why Name Your Vectors?
+Names make vectors much easier to read and interpret. When you come back to your code weeks later, `mahomes_yards["BAL"]` is much clearer than `mahomes_yards[1]`.
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: Missing Values — `NA`
+
+`NA` stands for **Not Available**. It is R's placeholder for missing data.
+
+Think of it like a blank cell in a spreadsheet — the data should be there, but it isn't.
+
+```{r}
+# Lamar Jackson's rushing yards per game, 2024 season
+# He missed 2 games due to injury (games 6 and 11)
+jackson_rushing <- c(45, 62, 38, 71, 55, NA, 49, 83, 60, 41, NA, 77)
+jackson_rushing
+```
+
+```{r}
+# R tells you there are 2 NAs
+summary(jackson_rushing)
+```
+
+### Detecting Missing Values with `is.na()`
+
+```{r}
+# Which positions are NA?
+is.na(jackson_rushing)
+```
+
+```{r}
+# How many games did he miss?
+sum(is.na(jackson_rushing))
+```
+
+```{r}
+# How many games did he play?
+sum(!is.na(jackson_rushing))   # ! means "NOT"
+```
+
+::: callout-warning
+## ️ NAs are Contagious!
+If any value in your calculation is `NA`, the result is also `NA`:
+
+```{r}
+mean(jackson_rushing)   # Returns NA — because of the missing games!
+```
+
+This seems annoying, but it's actually protecting you. R is saying: "I don't know the answer because some data is missing."
+:::
+
+------------------------------------------------------------------------
+
+## Part 3: Working Around Missing Values
+
+### `na.rm = TRUE`
+
+Most R statistical functions have an `na.rm` argument. Setting it to `TRUE` tells R to **remove the NAs before calculating**.
+
+```{r}
+# Now we get a real answer
+mean(jackson_rushing, na.rm = TRUE)
+```
+
+```{r}
+sum(jackson_rushing,  na.rm = TRUE)
+max(jackson_rushing,  na.rm = TRUE)
+min(jackson_rushing,  na.rm = TRUE)
+```
+
+::: callout-note
+## What does `na.rm` stand for?
+`na.rm` = **NA remove**. Setting it to `TRUE` removes `NA`s before doing the calculation.
+:::
+
+### Removing NAs Entirely
+
+Sometimes you want a clean vector with no `NA`s at all:
+
+```{r}
+# na.omit() removes all NA values
+jackson_clean <- na.omit(jackson_rushing)
+jackson_clean
+length(jackson_clean)   # 10 games (the 2 missed are gone)
+```
+
+```{r}
+# Alternatively, use logical indexing (we'll cover this more in Lab 6)
+jackson_played <- jackson_rushing[!is.na(jackson_rushing)]
+jackson_played
+```
+
+### Replacing NAs with a Value
+
+Sometimes you want to replace `NA` with something meaningful (like 0 for a missed game):
+
+```{r}
+jackson_with_zeros <- jackson_rushing
+jackson_with_zeros[is.na(jackson_with_zeros)] <- 0
+jackson_with_zeros
+```
+
+::: callout-important
+## Should You Replace NAs with Zero?
+It depends on the context! For rushing yards, replacing with 0 makes sense (if he didn't play, he gained 0 yards). But for body temperature or a test score, replacing missing data with 0 would be **wrong and misleading**.
+
+In science, always document how you handled missing values and justify your choice.
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: Vector Arithmetic
+
+Like we saw with sequences, arithmetic on vectors applies to **every element**:
+
+```{r}
+# Points scored by the Dallas Cowboys in each week of the season
+cowboys_pts <- c(24, 17, 31, 20, 28, 14, 35, 22, 19, 27,
+                 30, 21, 16, 28, 33, 18, 24)
+
+# Points scored by opponents (what they allowed)
+cowboys_allowed <- c(20, 21, 28, 17, 31, 20, 28, 30, 22, 14,
+                     17, 24, 27, 21, 30, 27, 20)
+
+# Point differential for each game (positive = win, negative = loss)
+point_diff <- cowboys_pts - cowboys_allowed
+point_diff
+```
+
+```{r}
+# Which games did they win?
+won_game <- point_diff > 0
+won_game
+```
+
+```{r}
+# How many wins?
+sum(won_game)
+```
+
+```{r}
+# How many losses?
+sum(point_diff < 0)
+```
+
+```{r}
+# Total points scored this season
+sum(cowboys_pts)
+
+# Average points per game
+round(mean(cowboys_pts), 1)
+```
+
+### Arithmetic Between Two Vectors
+
+```{r}
+# Suppose each point is worth different fantasy values
+# 1 point = 1 fantasy point, but bonus points for games over 28
+
+bonus <- ifelse(cowboys_pts > 28, 3, 0)   # 3 bonus points for high-scoring games
+fantasy_score <- cowboys_pts + bonus
+fantasy_score
+```
+
+::: callout-tip
+## `ifelse()` — Your First Conditional Function
+`ifelse(test, value_if_TRUE, value_if_FALSE)` applies a test to every element and returns one of two values.
+
+This is extremely useful and you'll use it constantly when cleaning data.
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: Putting It Together — QB Comparison
+
+Let's compare two quarterbacks across a shared 10-game stretch, handling missing data properly:
+
+```{r}
+# 10-game passer rating comparison
+qb_names <- c("Game 1", "Game 2", "Game 3", "Game 4", "Game 5",
+               "Game 6", "Game 7", "Game 8", "Game 9", "Game 10")
+
+# Patrick Mahomes passer ratings (0-158.3 scale)
+mahomes_rating <- c(112.4, 98.7, 131.2, NA, 105.8,
+                    122.1, 89.3, 141.5, 107.6, 118.9)
+
+# Jalen Hurts passer ratings
+hurts_rating   <- c(98.1, 107.5, 88.4, 125.3, 110.2,
+                    NA, 119.7, 92.8, NA, 130.1)
+
+# How many games did each miss?
+cat("Mahomes missed:", sum(is.na(mahomes_rating)), "game(s)\n")
+cat("Hurts missed:  ", sum(is.na(hurts_rating)), "game(s)\n")
+```
+
+```{r}
+# Average passer rating (ignoring missed games)
+mahomes_avg <- mean(mahomes_rating, na.rm = TRUE)
+hurts_avg   <- mean(hurts_rating,   na.rm = TRUE)
+
+cat("Mahomes average passer rating:", round(mahomes_avg, 1), "\n")
+cat("Hurts average passer rating:  ", round(hurts_avg,   1), "\n")
+cat("Difference:", round(mahomes_avg - hurts_avg, 1), "points\n")
+```
+
+```{r}
+# Simple side-by-side bar chart
+barplot(
+  c(mahomes_avg, hurts_avg),
+  names.arg = c("P. Mahomes", "J. Hurts"),
+  col       = c("#E31837", "#004C54"),   # Chiefs red, Eagles midnight green
+  ylim      = c(0, 160),
+  ylab      = "Average Passer Rating",
+  main      = "QB Passer Rating Comparison\n(missing games excluded)",
+  border    = "white"
+)
+abline(h = 100, col = "gray50", lty = 2)
+text(0.7, 102, "100 = Good QB Rating", col = "gray30", cex = 0.8)
+```
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** What does `NA` stand for in R?
+
+    a) Not Applicable  &nbsp;&nbsp; b) Not Available  &nbsp;&nbsp; c) Null Answer  &nbsp;&nbsp; d) Negative Amount
+
+**2.** You run `mean(c(10, 20, NA, 40))` and get `NA`. How do you fix this?
+
+**3.** What does `sum(is.na(x))` calculate?
+
+    a) The sum of all values in x  &nbsp;&nbsp; b) The number of missing values in x  &nbsp;&nbsp; c) Whether x has any NAs  &nbsp;&nbsp; d) The mean of x
+
+**4.** True or False: `na.omit(x)` replaces NAs with zero.
+
+**5.** You have a vector `scores <- c(88, NA, 91, 75, NA)`. Write the code to calculate the mean ignoring the missing values.
+
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) Not Available — `NA` is R's way of representing missing or unknown data.
+
+**2.** Add `na.rm = TRUE`: `mean(c(10, 20, NA, 40), na.rm = TRUE)` → returns `23.33`. The `na.rm` argument tells R to **remove NAs** before calculating.
+
+**3.** b) The number of missing values in x — `is.na(x)` returns a logical vector of TRUE/FALSE, and `sum()` counts the TRUEs (each TRUE = 1).
+
+**4.** **False** — `na.omit(x)` **removes** the NA values entirely, returning a shorter vector. To replace NAs with zero, you would use `x[is.na(x)] <- 0`.
+
+**5.** `mean(scores, na.rm = TRUE)` → returns `84.67` (average of 88, 91, and 75).
+:::
+
+------------------------------------------------------------------------
+
+## Lab 4 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Create a named vector using `c()` and `names()`
+- [ ] Explain what `NA` means in R
+- [ ] Use `is.na()` to find missing values
+- [ ] Use `sum(is.na())` to count missing values
+- [ ] Calculate `mean()`, `sum()`, etc. with `na.rm = TRUE`
+- [ ] Use `na.omit()` to remove NAs
+- [ ] Replace NAs using logical indexing `x[is.na(x)] <- value`
+- [ ] Perform arithmetic between two vectors
+
+::: callout-tip
+## Bonus Challenge
+Find the season statistics for two NFL quarterbacks (any two you like). Create named vectors for their touchdown passes in each week. One of them should have at least one `NA` for a missed game. Compare their averages using `na.rm = TRUE` and make a barplot. Add this to your Quarto document and render it.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Friday)
+
+- Read **Intro2r §3.1, 3.2**
+- Friday (Lab 5) we move to **data frames and matrices** — where rows and columns begin
+- Practice: create a vector with at least one `NA` and calculate its mean both with and without `na.rm = TRUE`
+
+------------------------------------------------------------------------

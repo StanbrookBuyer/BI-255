@@ -1,0 +1,364 @@
+---
+title: "Lab 17: Strip Charts, Violin Plots, Paired t-test & Two-Sample t-test"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "October 5, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Comparing Two Groups: Visualisation and Inference Together
+
+In experimental biology, the most common analytical question is: **does the treatment group differ from the control?** This lab builds the complete workflow — first visualising the data properly, then applying the appropriate t-test, and finally interpreting the result in biological context.
+
+We cover two visualisation methods (strip charts and violin plots) that show all the data, and two types of t-test depending on whether the groups are independent or paired.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Produce strip charts with `stripchart()` and ggplot2 `geom_jitter()`
+2. Produce violin plots with ggplot2 `geom_violin()`
+3. Determine when to use an independent vs paired t-test
+4. Run a paired t-test with `t.test(x, y, paired = TRUE)`
+5. Run a two-sample Welch's t-test with `t.test(x, y, var.equal = FALSE)`
+6. Report results in the format expected in a scientific paper
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Why Visualise Before Testing?
+
+Statistical tests summarise data into a single number (the p-value). Visualising the raw data first prevents you from being misled by that summary.
+
+```{r}
+library(ggplot2)
+
+# Three datasets with identical means, SDs — but very different shapes
+set.seed(42)
+n <- 30
+
+data_A <- rnorm(n, mean = 10, sd = 2)
+data_B <- c(rnorm(15, 8, 0.5), rnorm(15, 12, 0.5))   # Bimodal
+data_C <- c(rep(10, 20), rnorm(10, 10, 6))              # Outlier-heavy
+
+df_demo <- data.frame(
+  value = c(data_A, data_B, data_C),
+  group = rep(c("A", "B", "C"), each = n)
+)
+
+# All three look identical as means ± SD
+tapply(df_demo$value, df_demo$group, function(x) round(c(mean = mean(x), sd = sd(x)), 2))
+```
+
+```{r}
+# But look very different when you plot the raw data
+ggplot(df_demo, aes(x = group, y = value, colour = group)) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 4, colour = "black") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2, colour = "black") +
+  labs(title  = "Three Datasets with Identical Means and SDs",
+       subtitle = "Black diamond = mean ± SE",
+       x = "Dataset", y = "Value") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+::: callout-warning
+## Always Plot Raw Data
+
+Groups B and C have the same summary statistics as A, but:
+- B is bimodal (two subpopulations — perhaps treated and untreated cells mixed by accident)
+- C has heavy outliers that are dragging the mean
+
+A t-test would give almost identical p-values for all three comparisons. Only the plot reveals these problems. **Plot first, test second.**
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: Strip Charts
+
+A **strip chart** (also called a dot plot) shows every individual data point. It is ideal for small to moderate sample sizes (n < 100).
+
+```{r}
+set.seed(303)
+# Drug efficacy experiment: bacterial growth inhibition (mm zone of inhibition)
+control    <- round(rnorm(20, mean = 0,    sd = 1.5))   # No drug
+antibiotic <- round(rnorm(20, mean = 12.4, sd = 2.8))   # Drug added
+
+# Base R stripchart
+stripchart(list(Control = control, Antibiotic = antibiotic),
+           method   = "jitter",
+           vertical = TRUE,
+           pch      = 16,
+           cex      = 1.2,
+           col      = c("#2C5F8A", "#C8102E"),
+           ylab     = "Zone of Inhibition (mm)",
+           main     = "Antibiotic Efficacy — Strip Chart")
+
+# Add means ± SE
+means <- c(mean(control), mean(antibiotic))
+ses   <- c(sd(control)/sqrt(20), sd(antibiotic)/sqrt(20))
+points(1:2, means, pch = 18, cex = 2.5, col = "black")
+arrows(1:2, means - ses, 1:2, means + ses,
+       angle = 90, code = 3, length = 0.08, lwd = 2, col = "black")
+```
+
+### Strip Charts with ggplot2
+
+```{r}
+# Combine into a data frame for ggplot2
+growth_df <- data.frame(
+  inhibition = c(control, antibiotic),
+  group      = rep(c("Control", "Antibiotic"), each = 20)
+)
+
+ggplot(growth_df, aes(x = group, y = inhibition, colour = group)) +
+  geom_jitter(width = 0.12, size = 2.5, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar",
+               width = 0.3, fatten = 2, colour = "black") +
+  scale_colour_manual(values = c("Control" = "#2C5F8A", "Antibiotic" = "#C8102E")) +
+  labs(title = "Zone of Inhibition by Treatment",
+       x     = "Treatment",
+       y     = "Zone of Inhibition (mm)") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Violin Plots
+
+A **violin plot** shows the full probability distribution of the data — essentially a smoothed density estimate mirrored on both sides. It is more informative than a box plot for revealing the shape of a distribution.
+
+```{r}
+set.seed(55)
+# Cell viability (% of control) after three drug treatments
+cell_df <- data.frame(
+  viability = c(rnorm(30, 100, 8),     # Vehicle control
+                rnorm(30,  72, 12),    # Drug X (1 uM)
+                rnorm(30,  45, 15)),   # Drug X (10 uM)
+  treatment = rep(c("Vehicle", "Drug 1uM", "Drug 10uM"), each = 30)
+)
+
+# Set factor order for logical display
+cell_df$treatment <- factor(cell_df$treatment,
+                             levels = c("Vehicle", "Drug 1uM", "Drug 10uM"))
+
+ggplot(cell_df, aes(x = treatment, y = viability, fill = treatment)) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  geom_boxplot(width = 0.12, fill = "white", outlier.shape = NA) +
+  geom_jitter(width = 0.05, size = 1.2, alpha = 0.5, colour = "grey30") +
+  scale_fill_manual(values = c("Vehicle"    = "#2C5F8A",
+                               "Drug 1uM"   = "#5B8DB8",
+                               "Drug 10uM"  = "#C8102E")) +
+  labs(title = "Cell Viability Following Drug X Treatment",
+       x     = "Treatment",
+       y     = "Cell Viability (% of control)") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+::: callout-tip
+## Violin + Box Plot Combination
+
+Layering a narrow box plot inside a violin plot gives you:
+- The **distribution shape** from the violin
+- The **median, IQR, and outlier information** from the box plot
+- The **individual data points** from `geom_jitter()`
+
+This combination is increasingly expected in high-impact biology journals.
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: The Independent Two-Sample t-test
+
+Use this test when comparing two **independent** groups — different subjects, cells, or experimental units in each group.
+
+```{r}
+# Return to the antibiotic example
+# H₀: mean zone of inhibition is the same in control and antibiotic groups
+# H₁: antibiotic produces a larger zone of inhibition
+
+result_indep <- t.test(antibiotic, control,
+                       alternative = "greater",   # We predict antibiotic > control
+                       var.equal   = FALSE)        # Welch's t-test — safer default
+result_indep
+```
+
+::: callout-note
+## Reporting t-test Results
+
+The conventional scientific format for reporting a t-test result is:
+
+**"The antibiotic produced significantly larger zones of inhibition than the control (t(df) = t-value, p = p-value)."**
+
+For example: *"The antibiotic produced significantly larger zones of inhibition than the control (t(29.4) = 21.3, p < 0.001)."*
+
+Always include: the test statistic (t), degrees of freedom (df), and p-value. If effect size was calculated (Cohen's d), include that too.
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: The Paired t-test
+
+Use a paired t-test when each observation in group 1 is **matched** to a specific observation in group 2. This is common in:
+
+- Before/after designs (same subject measured twice)
+- Matched case-control studies
+- Left/right comparisons on the same organism
+- Replicate wells on the same plate
+
+Pairing removes between-subject variability, making the test more powerful.
+
+```{r}
+# Before/after experiment: blood glucose (mmol/L) in 18 patients
+# measured before and 2 hours after an oral glucose tolerance test (OGTT)
+set.seed(888)
+n_patients <- 18
+glucose_fasting  <- round(rnorm(n_patients, mean = 5.2, sd = 0.5), 1)
+glucose_2hr      <- glucose_fasting + round(rnorm(n_patients, mean = 3.8, sd = 1.2), 1)
+
+cat("Fasting glucose:   mean =", round(mean(glucose_fasting), 2), "mmol/L\n")
+cat("2-hour glucose:    mean =", round(mean(glucose_2hr),     2), "mmol/L\n")
+cat("Mean difference:         ", round(mean(glucose_2hr - glucose_fasting), 2), "mmol/L\n")
+```
+
+```{r}
+# Paired t-test
+# H₀: mean glucose does not change after OGTT
+# H₁: glucose increases after OGTT
+result_paired <- t.test(glucose_2hr, glucose_fasting,
+                        paired      = TRUE,
+                        alternative = "greater")
+result_paired
+```
+
+```{r}
+# Visualise the paired nature of the data
+patient_df <- data.frame(
+  glucose  = c(glucose_fasting, glucose_2hr),
+  timepoint = rep(c("Fasting", "2-Hour Post-OGTT"), each = n_patients),
+  patient  = rep(1:n_patients, 2)
+)
+
+patient_df$timepoint <- factor(patient_df$timepoint,
+                                levels = c("Fasting", "2-Hour Post-OGTT"))
+
+ggplot(patient_df, aes(x = timepoint, y = glucose)) +
+  geom_line(aes(group = patient), colour = "grey70", linewidth = 0.5) +
+  geom_point(aes(colour = timepoint), size = 3) +
+  scale_colour_manual(values = c("Fasting"          = "#2C5F8A",
+                                 "2-Hour Post-OGTT" = "#C8102E")) +
+  stat_summary(fun = mean, geom = "point", shape = 18,
+               size = 5, colour = "black") +
+  labs(title    = "Blood Glucose: Oral Glucose Tolerance Test",
+       subtitle = paste0("n = ", n_patients, " patients; paired t-test, p = ",
+                         formatC(result_paired$p.value, format = "e", digits = 2)),
+       x        = "Timepoint",
+       y        = "Blood Glucose (mmol/L)") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+::: callout-important
+## Paired vs Independent: Which Do You Use?
+
+| Design | Test | Why |
+|--------|------|-----|
+| Different subjects in each group | Independent (Welch's) t-test | Groups share no observations |
+| Same subjects measured twice | Paired t-test | Removes within-subject variability |
+| Matched controls | Paired t-test | Each case has a specific matched control |
+
+Using a paired test when data are independent (or vice versa) gives the wrong answer. **Always check your experimental design before choosing a test.**
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** You are comparing body weight in 25 mice before and after a 4-week dietary intervention (the same 25 mice measured twice). Which test is appropriate?
+
+    a) Independent two-sample t-test    b) Paired t-test    c) One-sample t-test    d) Chi-square test
+
+**2.** What does a violin plot show that a box plot does not?
+
+**3.** In a paired t-test, the test is effectively performed on:
+
+    a) The raw values in each group    b) The differences between paired observations    c) The ranks of the observations    d) The log-transformed values
+
+**4.** You run `t.test(treated, control, var.equal = FALSE)`. What does `var.equal = FALSE` specify?
+
+**5.** True or False: A strip chart (dot plot) is more informative than a mean ± SD bar chart for small sample sizes (n < 20).
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) Paired t-test — The same 25 mice are measured twice: once before and once after the intervention. Each mouse's two measurements are paired. The paired t-test removes between-mouse variability (e.g., natural size differences) and focuses on the change within each mouse.
+
+**2.** A violin plot shows the **full shape of the distribution** — including whether it is unimodal, bimodal, symmetric, or skewed. A box plot only shows the median, quartiles, and outliers. A bimodal distribution (two peaks) can hide completely inside a box plot.
+
+**3.** b) The differences between paired observations — a paired t-test computes d = x₁ − x₂ for each pair and then runs a one-sample t-test asking whether the mean difference is significantly different from zero. This is mathematically equivalent to `t.test(x1 - x2, mu = 0)`.
+
+**4.** `var.equal = FALSE` specifies **Welch's t-test**, which does not assume equal variances between the two groups. This is the safer default because violation of equal variances inflates Type I error in the standard Student's t-test. Use `var.equal = TRUE` only if you have strong reason to believe the variances are equal (which you should verify with Levene's test — Lab 18).
+
+**5.** **True** — For small samples, individual data points are visible and meaningful. A mean ± SD bar chart hides the distribution entirely — with n = 5, for example, you cannot tell if the data are normally distributed, skewed, or contain outliers. Strip charts reveal these features directly.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 17 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Explain why you should plot data before running a statistical test
+- [ ] Produce a strip chart with `stripchart()` and with `geom_jitter()`
+- [ ] Produce a violin plot with `geom_violin()` and overlay a box plot and jittered points
+- [ ] Determine whether a paired or independent t-test is appropriate for a given design
+- [ ] Run `t.test(x, y, paired = TRUE)` and interpret the output
+- [ ] Run `t.test(x, y, var.equal = FALSE)` (Welch's) and interpret the output
+- [ ] Report t-test results in the standard scientific format: t(df) = value, p = value
+
+::: callout-tip
+## Bonus Challenge
+
+Design your own experiment: choose a biological question involving two groups (e.g., antibiotic A vs antibiotic B, treated vs untreated cells, gene expression before vs after induction). Simulate realistic data using `rnorm()` with biologically plausible means and SDs. Produce a publication-ready violin + jitter plot in ggplot2, run the appropriate t-test, and write a one-sentence conclusion in scientific language.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Wednesday)
+
+- Wednesday (Lab 18): Confidence intervals from t-tests, and Levene's test for equal variances
+- Read **R for Data Science Ch. 9–10**
+
+------------------------------------------------------------------------

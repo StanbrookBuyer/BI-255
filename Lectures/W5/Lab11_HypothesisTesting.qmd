@@ -1,0 +1,374 @@
+---
+title: "Lab 11: Hypothesis Testing & the Null Hypothesis"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "September 16, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Does This Antibiotic Actually Work?
+
+Every clinical drug trial, every laboratory experiment comparing treatment to control, every epidemiological study asking whether a risk factor matters — all of these rest on **hypothesis testing**. It is arguably the most important inferential tool in science.
+
+In this lab we build a thorough understanding of the hypothesis testing framework: what the null hypothesis means, what a p-value actually tells us, the consequences of getting the decision wrong, and how to measure whether an effect is not just statistically significant but biologically meaningful.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. State null and alternative hypotheses precisely for a biological question
+2. Explain a p-value in plain language without common misconceptions
+3. Distinguish Type I and Type II errors and explain their consequences
+4. Run one-sample and two-sample t-tests for biological data
+5. Compute and interpret Cohen's d as a measure of effect size
+6. Understand the difference between statistical significance and practical importance
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: The Hypothesis Testing Framework
+
+### The Logic
+
+Scientists use hypothesis testing to decide whether observed data are consistent with a default assumption (the **null hypothesis**) or whether the data provide enough evidence to conclude something different is happening.
+
+The framework always follows this structure:
+
+::: callout-important
+## The Four Steps of Hypothesis Testing
+
+**Step 1 — State the hypotheses**
+H₀ (null hypothesis): the default assumption — usually "no effect" or "no difference"
+H₁ (alternative hypothesis): what you are trying to find evidence for
+
+**Step 2 — Choose a significance level**
+Conventionally α = 0.05. This is the probability of rejecting H₀ when it is actually true that we are willing to accept.
+
+**Step 3 — Compute the test statistic and p-value**
+Use the appropriate R function for your data type.
+
+**Step 4 — Make a decision**
+If p < α: reject H₀ — the data are unlikely under the null hypothesis
+If p ≥ α: fail to reject H₀ — insufficient evidence to conclude H₁
+:::
+
+### A Biological Example
+
+A new antibiotic is claimed to reduce bacterial colony counts. In untreated cultures, the mean colony count is 500 CFU/mL (CFU = colony forming units). You treat 20 cultures with the antibiotic and measure colony counts.
+
+```{r}
+# Colony counts (CFU/mL) from 20 antibiotic-treated cultures
+set.seed(101)
+treated_cfu <- round(rnorm(20, mean = 460, sd = 55))
+treated_cfu
+```
+
+```{r}
+cat("Sample mean:", round(mean(treated_cfu), 1), "CFU/mL\n")
+cat("Sample SD:  ", round(sd(treated_cfu), 1), "CFU/mL\n")
+cat("n =", length(treated_cfu), "\n")
+```
+
+The mean in our treated sample is lower than 500 — but is this a real effect or just random variation?
+
+**H₀**: The mean CFU/mL in treated cultures = 500 (no effect)
+**H₁**: The mean CFU/mL in treated cultures < 500 (antibiotic reduces colonies)
+
+```{r}
+# One-sample t-test against mu = 500, one-tailed (less than)
+t.test(treated_cfu, mu = 500, alternative = "less")
+```
+
+------------------------------------------------------------------------
+
+## Part 2: Understanding the p-value
+
+The p-value is one of the most misunderstood quantities in science. Let's be precise.
+
+::: callout-important
+## What a p-value IS and IS NOT
+
+**A p-value IS:**
+The probability of obtaining a test statistic as extreme as (or more extreme than) the one observed, **assuming the null hypothesis is true**.
+
+**A p-value IS NOT:**
+- The probability that H₀ is true
+- The probability that your result occurred by chance
+- A measure of the size or importance of an effect
+- Proof of anything
+
+A small p-value means: "This result would be very unusual if H₀ were true." That is all it means.
+:::
+
+### Visualising the p-value
+
+```{r}
+# Visualise what the p-value represents
+# Under H₀: t-distribution with df = 19
+x <- seq(-5, 5, length = 500)
+plot(x, dt(x, df = 19),
+     type = "l", lwd = 2,
+     col  = "#2C5F8A",
+     xlab = "t statistic",
+     ylab = "Density",
+     main = "t-Distribution Under H₀ (df = 19)\nShaded area = p-value")
+
+# Calculate observed t
+t_obs <- (mean(treated_cfu) - 500) / (sd(treated_cfu) / sqrt(20))
+cat("Observed t-statistic:", round(t_obs, 3), "\n")
+
+# Shade the p-value region (left tail)
+x_shade <- seq(-5, t_obs, length = 200)
+polygon(c(x_shade, rev(x_shade)),
+        c(dt(x_shade, df = 19), rep(0, 200)),
+        col = "#C8102E60", border = NA)
+abline(v = t_obs, col = "#C8102E", lty = 2, lwd = 2)
+text(t_obs - 0.3, 0.3, paste0("t = ", round(t_obs, 2)),
+     col = "#C8102E", adj = 1)
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Type I and Type II Errors
+
+Every decision in hypothesis testing can be wrong in one of two ways:
+
+```{r, echo=FALSE}
+cat("
+                     TRUE STATE OF THE WORLD
+                  H₀ is true      H₀ is false
+              ┌──────────────────────────────────┐
+ OUR   Reject │ TYPE I ERROR   │ Correct decision │
+DECISION  H₀  │ (False positive) │  (True positive) │
+              │ Probability = α  │ Power = 1 - β   │
+              ├──────────────────┼──────────────────┤
+       Fail   │ Correct decision │ TYPE II ERROR   │
+       to     │  (True negative) │ (False negative) │
+       reject │                  │ Probability = β  │
+              └──────────────────────────────────┘
+")
+```
+
+::: callout-warning
+## The Consequences of Each Error Type
+
+**Type I Error (false positive, probability = α):**
+You conclude the antibiotic works when it does not. Consequence: a useless drug enters clinical use; patients are exposed to side effects with no benefit.
+
+**Type II Error (false negative, probability = β):**
+You conclude the antibiotic does not work when it actually does. Consequence: an effective treatment is abandoned; patients who could have been helped are not.
+
+Reducing α makes Type I errors less likely but increases Type II errors. The only way to reduce both simultaneously is to **increase sample size**.
+:::
+
+### Statistical Power
+
+**Power** (= 1 − β) is the probability of correctly detecting an effect when it truly exists. In biology, we conventionally aim for 80% power (β = 0.20).
+
+```{r}
+# The power.t.test() function calculates required sample size
+# Suppose the true mean reduction is 50 CFU/mL (delta = 50)
+# SD from our pilot data ~ 55 CFU/mL
+# We want 80% power at alpha = 0.05 (one-sided)
+
+power.t.test(delta   = 50,
+             sd      = 55,
+             sig.level  = 0.05,
+             power   = 0.80,
+             type    = "one.sample",
+             alternative = "one.sided")
+```
+
+::: callout-note
+## Reading `power.t.test()` Output
+
+The output tells you the **minimum sample size** needed to detect an effect of the given size with the specified power. If our true effect is 50 CFU/mL reduction and SD is 55, we need approximately this many treated cultures to have an 80% chance of detecting it.
+
+Planning sample sizes before data collection is called **a priori power analysis** and is expected in scientific publications.
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: Two-Sample t-test — Comparing Treatment and Control
+
+More commonly, we compare two independent groups. A new enzyme inhibitor is tested against a vehicle control in a cell viability assay:
+
+```{r}
+# Cell viability (% of control) in two groups
+set.seed(202)
+control    <- round(rnorm(25, mean = 100, sd = 12), 1)
+inhibitor  <- round(rnorm(25, mean = 85,  sd = 14), 1)
+
+cat("Control group:   mean =", round(mean(control), 1),
+    "  SD =", round(sd(control), 1), "\n")
+cat("Inhibitor group: mean =", round(mean(inhibitor), 1),
+    "  SD =", round(sd(inhibitor), 1), "\n")
+```
+
+```{r}
+# H₀: mean viability is the same in both groups
+# H₁: inhibitor reduces viability (mean inhibitor < mean control)
+result <- t.test(inhibitor, control,
+                 alternative = "less",
+                 var.equal   = FALSE)   # Welch's t-test — does not assume equal variances
+result
+```
+
+```{r}
+# Visualise
+boxplot(list(Control = control, Inhibitor = inhibitor),
+        col  = c("#A8C4D9", "#C8102E60"),
+        ylab = "Cell Viability (% of control)",
+        main = "Effect of Enzyme Inhibitor on Cell Viability\n(n = 25 per group)")
+stripchart(list(Control = control, Inhibitor = inhibitor),
+           method   = "jitter",
+           vertical = TRUE,
+           add      = TRUE,
+           pch      = 16, cex = 0.7,
+           col      = c("#2C5F8A", "#8B0000"))
+```
+
+------------------------------------------------------------------------
+
+## Part 5: Effect Size — Cohen's d
+
+Statistical significance tells you whether an effect is real; **effect size** tells you how big it is. A study with 10,000 samples can find statistically significant differences that are biologically trivial.
+
+**Cohen's d** measures the standardised difference between two means:
+
+d = (mean₁ − mean₂) / pooled SD
+
+```{r}
+# Calculate Cohen's d manually
+cohens_d <- function(x, y) {
+  pooled_sd <- sqrt(((length(x) - 1) * var(x) + (length(y) - 1) * var(y)) /
+                    (length(x) + length(y) - 2))
+  d <- (mean(x) - mean(y)) / pooled_sd
+  return(d)
+}
+
+d <- cohens_d(control, inhibitor)
+cat("Cohen's d:", round(d, 3), "\n")
+```
+
+::: callout-note
+## Interpreting Cohen's d
+
+| d value | Conventional interpretation |
+|---------|---------------------------|
+| 0.2 | Small effect |
+| 0.5 | Medium effect |
+| 0.8 | Large effect |
+
+These thresholds come from Cohen (1988) and are widely used in biology. A large Cohen's d combined with a small p-value gives you the strongest evidence that an effect is both real and meaningful.
+
+Our inhibitor shows d = 1.08 — a large effect. Even if the p-value were borderline, this magnitude of difference is biologically relevant for a cell viability assay.
+:::
+
+------------------------------------------------------------------------
+
+## Part 6: One-Sided vs Two-Sided Tests
+
+```{r}
+# Same data, two-sided test (H₁: means are different, direction unspecified)
+t.test(inhibitor, control, alternative = "two.sided", var.equal = FALSE)
+```
+
+::: callout-tip
+## When to Use Each
+
+Use a **two-sided test** (default) unless you have a strong prior biological reason to predict the direction of the effect before seeing the data.
+
+Pre-registering a one-sided test because you believe a drug will reduce (not increase) cell viability is scientifically defensible. Switching to a one-sided test after seeing that your effect went in a convenient direction is not — this is sometimes called "p-hacking."
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** A researcher tests whether a new fertiliser changes plant height. H₀: mean height = 30 cm. After treating 20 plants they get p = 0.08. What is the correct conclusion at α = 0.05?
+
+    a) Reject H₀; the fertiliser works    b) Accept H₀; the fertiliser has no effect    c) Fail to reject H₀; insufficient evidence    d) The experiment was inconclusive and must be repeated
+
+**2.** A drug trial concludes the drug is ineffective (fails to reject H₀), but the drug actually does work. What type of error is this?
+
+    a) Type I error    b) Type II error    c) Sampling error    d) Measurement error
+
+**3.** Cohen's d = 0.15 for a comparison between two treatment groups. How would you describe this effect?
+
+**4.** You run `t.test(group_A, group_B, alternative = "two.sided")`. What hypothesis does this test?
+
+**5.** True or False: A p-value of 0.001 means there is a 0.1% probability that the null hypothesis is true.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** c) Fail to reject H₀ — p = 0.08 is greater than α = 0.05, so we do not have sufficient evidence to reject the null hypothesis. We cannot "accept" H₀ — we simply lack evidence against it. We also cannot conclude "no effect" — we can only say the evidence is insufficient.
+
+**2.** b) Type II error — A false negative: the effect exists but we failed to detect it. This is also called a "miss." Its probability is β, and 1 − β is the statistical power of the test.
+
+**3.** A small effect — Cohen's d = 0.15 is below the conventional threshold of 0.2 for a small effect. Even if the p-value were < 0.05, this magnitude of difference may not be biologically meaningful.
+
+**4.** H₀: the means of group_A and group_B are equal, versus H₁: the means are different (in either direction). The two-sided test does not specify which group should be larger.
+
+**5.** **False** — This is one of the most common misinterpretations of the p-value. A p-value is the probability of the data (or more extreme data) given that H₀ is true — NOT the probability that H₀ is true. Determining the probability of a hypothesis requires a different framework (Bayesian statistics).
+:::
+
+------------------------------------------------------------------------
+
+## Lab 11 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Write H₀ and H₁ for a biological question in precise statistical language
+- [ ] Explain what a p-value means without any of the common misconceptions
+- [ ] Distinguish between Type I (false positive) and Type II (false negative) errors
+- [ ] Run a one-sample t-test with `t.test(x, mu = value)`
+- [ ] Run a two-sample Welch's t-test with `t.test(x, y, var.equal = FALSE)`
+- [ ] Calculate and interpret Cohen's d as an effect size
+- [ ] Explain why statistical significance alone is insufficient to claim a result is important
+
+::: callout-tip
+## Bonus Challenge
+
+Using `power.t.test()`, calculate how many samples per group you would need to detect a Cohen's d of 0.5 with 90% power at α = 0.05 (two-sided). How does this change if you only need 70% power?
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Quiz Friday, then Week 6)
+
+- **Friday: Quiz 3** — covers frequency data, proportions, Poisson, and hypothesis testing (Labs 10–11)
+- After the quiz, **Week 6** begins data visualisation
+- Read **Wilke 2021 Ch. 5 and 7** over the weekend
+
+------------------------------------------------------------------------

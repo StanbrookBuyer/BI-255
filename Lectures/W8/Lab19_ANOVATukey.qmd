@@ -1,0 +1,330 @@
+---
+title: "Lab 19: ANOVA & Tukey-Kramer Post-hoc Tests"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "October 9, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Comparing Three or More Groups: ANOVA
+
+When an experiment has more than two treatment groups, running multiple t-tests inflates the Type I error rate. If you run three pairwise t-tests each at α = 0.05, the probability of at least one false positive is no longer 5% — it is much higher.
+
+**Analysis of variance (ANOVA)** solves this by testing all groups simultaneously in a single test. When ANOVA finds a significant overall effect, **post-hoc tests** (specifically the Tukey-Kramer test) identify which specific pairs of groups differ.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Explain why multiple t-tests inflate Type I error and why ANOVA is needed
+2. State the ANOVA null hypothesis correctly
+3. Run a one-way ANOVA with `aov()` and read the summary table
+4. Interpret the F-statistic and its associated p-value
+5. Apply the Tukey-Kramer test with `TukeyHSD()` for all pairwise comparisons
+6. Visualise ANOVA results with box plots and significance brackets
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Why Not Multiple t-tests?
+
+```{r}
+# Demonstrate inflation of Type I error with multiple tests
+# Suppose H₀ is true for all pairs (no differences exist)
+# If we run k independent tests, each at alpha = 0.05:
+k_tests  <- 1:10
+family_alpha <- 1 - (1 - 0.05)^k_tests
+
+data.frame(Tests = k_tests,
+           Family_wise_error = round(family_alpha, 4))
+```
+
+::: callout-warning
+## The Multiple Testing Problem
+
+With 3 groups, there are 3 pairwise comparisons. If all three are tested at α = 0.05, the probability of at least one false positive rises to ~14%. With 5 groups and 10 comparisons, it is ~40%.
+
+ANOVA controls the **family-wise error rate** — the probability of any false positive across the full set of comparisons — at α = 0.05.
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: One-Way ANOVA — Plant Growth Under Nitrogen Treatments
+
+A plant biology experiment tests the effect of four nitrogen fertiliser concentrations on shoot dry weight (g) after 6 weeks:
+
+```{r}
+set.seed(42)
+shoot_weight <- data.frame(
+  nitrogen  = rep(c("0 mM", "2 mM", "5 mM", "10 mM"), each = 15),
+  dry_weight = c(
+    rnorm(15, mean = 1.2, sd = 0.25),   # 0 mM (control)
+    rnorm(15, mean = 2.1, sd = 0.30),   # 2 mM
+    rnorm(15, mean = 3.4, sd = 0.40),   # 5 mM
+    rnorm(15, mean = 2.8, sd = 0.35)    # 10 mM (diminishing returns)
+  )
+)
+
+# Set factor order
+shoot_weight$nitrogen <- factor(shoot_weight$nitrogen,
+                                 levels = c("0 mM", "2 mM", "5 mM", "10 mM"))
+
+# Summary statistics
+tapply(shoot_weight$dry_weight, shoot_weight$nitrogen,
+       function(x) round(c(mean = mean(x), sd = sd(x), n = length(x)), 3))
+```
+
+### Visualise Before Testing
+
+```{r}
+library(ggplot2)
+
+ggplot(shoot_weight, aes(x = nitrogen, y = dry_weight, fill = nitrogen)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.1, size = 1.8, alpha = 0.6, colour = "grey30") +
+  scale_fill_manual(values = c("0 mM"  = "#A8C4D9",
+                               "2 mM"  = "#5B8DB8",
+                               "5 mM"  = "#2C5F8A",
+                               "10 mM" = "#1A3D5C")) +
+  labs(title = "Shoot Dry Weight Under Four Nitrogen Treatments",
+       x     = "Nitrogen Concentration",
+       y     = "Shoot Dry Weight (g)") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+### Run the ANOVA
+
+```{r}
+# ANOVA null hypothesis: all four group means are equal
+# H₀: mu(0mM) = mu(2mM) = mu(5mM) = mu(10mM)
+# H₁: at least one group mean differs
+
+anova_model <- aov(dry_weight ~ nitrogen, data = shoot_weight)
+summary(anova_model)
+```
+
+::: callout-important
+## Reading the ANOVA Table
+
+| Column | Meaning |
+|--------|---------|
+| `Df` | Degrees of freedom — groups: k−1; residuals: n−k |
+| `Sum Sq` | Sum of squares — total variation attributed to each source |
+| `Mean Sq` | Mean square = Sum Sq / Df |
+| `F value` | Ratio of between-group variance to within-group variance |
+| `Pr(>F)` | p-value — probability of this F or larger if H₀ is true |
+
+A large F-ratio means the variation **between groups** is large relative to variation **within groups** — evidence that at least one group mean differs.
+
+A significant ANOVA tells you that **some** difference exists. It does not tell you **which** groups differ — that requires a post-hoc test.
+:::
+
+------------------------------------------------------------------------
+
+## Part 3: The F-ratio — A Visual Explanation
+
+```{r}
+# Show what F represents: between-group vs within-group variance
+grand_mean <- mean(shoot_weight$dry_weight)
+group_means <- tapply(shoot_weight$dry_weight, shoot_weight$nitrogen, mean)
+
+cat("Grand mean:", round(grand_mean, 3), "\n")
+cat("Group means:\n")
+print(round(group_means, 3))
+```
+
+```{r}
+# Plot showing between-group and within-group variation
+ggplot(shoot_weight, aes(x = nitrogen, y = dry_weight, colour = nitrogen)) +
+  geom_jitter(width = 0.12, size = 2, alpha = 0.7) +
+  geom_hline(yintercept = grand_mean, linetype = "dashed", colour = "grey40") +
+  stat_summary(fun = mean, geom = "point", shape = 18,
+               size = 5, colour = "black") +
+  stat_summary(fun = mean, geom = "errorbar",
+               fun.min = mean, fun.max = mean,
+               width = 0.4, linewidth = 1, colour = "black") +
+  annotate("text", x = 4.4, y = grand_mean + 0.07,
+           label = "Grand mean", hjust = 0, colour = "grey40", size = 3.5) +
+  scale_colour_manual(values = c("0 mM" = "#A8C4D9", "2 mM" = "#5B8DB8",
+                                 "5 mM" = "#2C5F8A", "10 mM" = "#1A3D5C")) +
+  labs(title    = "Within-Group vs Between-Group Variation",
+       subtitle = "Black diamond = group mean; dashed line = grand mean",
+       x = "Nitrogen", y = "Dry Weight (g)") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+------------------------------------------------------------------------
+
+## Part 4: Tukey-Kramer Post-hoc Test
+
+The Tukey-Kramer test (often called just Tukey's HSD — Honestly Significant Difference) makes all pairwise comparisons while controlling the family-wise error rate at α = 0.05.
+
+```{r}
+# Tukey-Kramer post-hoc comparisons
+tukey_result <- TukeyHSD(anova_model)
+tukey_result
+```
+
+```{r}
+# Visualise the pairwise differences with confidence intervals
+plot(tukey_result, las = 1, col = "#2C5F8A")
+abline(v = 0, col = "#C8102E", lty = 2)
+```
+
+::: callout-note
+## Reading Tukey-Kramer Output
+
+Each row is one pairwise comparison. The columns are:
+
+| Column | Meaning |
+|--------|---------|
+| `diff` | Estimated difference in means (group2 − group1) |
+| `lwr, upr` | 95% family-wise CI for the difference |
+| `p adj` | p-value adjusted for multiple comparisons |
+
+If `p adj < 0.05`: the two groups differ significantly after correcting for multiple comparisons.
+
+If the CI for a comparison **does not cross 0**, the difference is significant. The plot makes this easy to see at a glance.
+:::
+
+### Checking ANOVA Assumptions
+
+```{r}
+# ANOVA assumes: (1) normality of residuals, (2) equal variances
+par(mfrow = c(1, 2))
+plot(anova_model, which = c(1, 2))   # Residuals vs fitted + QQ plot of residuals
+par(mfrow = c(1, 1))
+```
+
+::: callout-tip
+## ANOVA Diagnostic Plots
+
+**Residuals vs Fitted** (left): Points should scatter randomly around 0 with no pattern. A funnel shape indicates unequal variances (heteroscedasticity).
+
+**Normal QQ plot of residuals** (right): Points should fall on the diagonal line. Departures indicate non-normal residuals.
+
+ANOVA is robust to moderate violations of normality (by the CLT) but more sensitive to unequal variances. If variances are unequal, use Welch's ANOVA: `oneway.test(y ~ group, var.equal = FALSE)`.
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: Summarising Results Clearly
+
+```{r}
+# Complete summary table of means ± SD with significance labels
+library(dplyr)
+
+summary_table <- shoot_weight |>
+  group_by(nitrogen) |>
+  summarise(
+    n          = n(),
+    mean_g     = round(mean(dry_weight), 2),
+    sd_g       = round(sd(dry_weight), 2),
+    .groups    = "drop"
+  )
+
+print(summary_table)
+
+cat("\nOne-way ANOVA: F(3,56) =",
+    round(summary(anova_model)[[1]]$"F value"[1], 2),
+    ", p =",
+    formatC(summary(anova_model)[[1]]$"Pr(>F)"[1], format = "e", digits = 2), "\n")
+cat("Post-hoc comparisons: Tukey-Kramer HSD\n")
+```
+
+::: callout-note
+## How to Report ANOVA in a Paper
+
+"Shoot dry weight differed significantly among nitrogen treatments (one-way ANOVA: F(3, 56) = 58.4, p < 0.001). Tukey-Kramer post-hoc tests revealed that 5 mM nitrogen produced the greatest shoot biomass, which was significantly greater than all other concentrations (all p < 0.05). The 0 mM control produced the lowest biomass, which differed significantly from the 2 mM, 5 mM, and 10 mM groups."
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** You have 4 treatment groups and want to compare all pairs. How many pairwise comparisons are there, and why is running individual t-tests for each problematic?
+
+**2.** An ANOVA gives F(2, 57) = 8.4, p = 0.0006. What does this tell you?
+
+    a) All three group means are different from each other    b) At least one group mean differs from the others    c) The first group differs from the second    d) The variance within groups is larger than between groups
+
+**3.** After a significant ANOVA, you run `TukeyHSD()` and find that the comparison between Group A and Group C gives `p adj = 0.31`. What do you conclude?
+
+**4.** In the ANOVA diagnostic plot "Residuals vs Fitted," what pattern would concern you about the equal variance assumption?
+
+**5.** True or False: A non-significant ANOVA (p = 0.18) means all group means are equal.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** With 4 groups there are 4×3/2 = **6 pairwise comparisons**. Running 6 t-tests each at α = 0.05 gives a family-wise error rate of 1 − (0.95)⁶ = 0.26 — a 26% chance of at least one false positive. ANOVA tests the overall effect once and controls this at 5%.
+
+**2.** b) At least one group mean differs from the others — ANOVA's H₀ is that all group means are equal. A significant F-test (p = 0.0006 << 0.05) allows you to reject this H₀ and conclude that at least one mean differs. It does not specify which groups differ — that is the job of Tukey-Kramer post-hoc tests.
+
+**3.** After Tukey-Kramer correction, p adj = 0.31 > 0.05, so there is **no statistically significant difference** between Group A and Group C. The Tukey-Kramer correction adjusts for the fact that you are making multiple comparisons; the adjusted p-value accounts for this. You fail to reject H₀ for this specific pair.
+
+**4.** A **funnel shape** (variance increasing as fitted values increase) — this indicates heteroscedasticity (unequal variances across groups). Points should scatter randomly around the zero line with approximately constant spread. A funnel or any systematic pattern suggests the equal variance assumption is violated.
+
+**5.** **False** — A non-significant ANOVA means you **failed to reject** H₀ — the data are insufficient to conclude that means differ. This is not the same as proving the means are equal. The result could reflect inadequate power (small sample size), high variability, or a genuine absence of effect. You cannot conclude "no difference" from a non-significant result.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 19 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Explain why running multiple t-tests inflates the Type I error rate
+- [ ] State the null hypothesis for a one-way ANOVA
+- [ ] Run `aov()` and interpret the resulting ANOVA table (F, df, p-value)
+- [ ] Run `TukeyHSD()` and identify which pairwise comparisons are significant
+- [ ] Interpret the Tukey-Kramer confidence interval plot: does the CI cross zero?
+- [ ] Check ANOVA diagnostic plots: residuals vs fitted and QQ of residuals
+- [ ] Report ANOVA results in the standard scientific format: F(df₁, df₂) = value, p = value
+
+::: callout-tip
+## Bonus Challenge
+
+Design an experiment with 5 treatment groups (e.g., five antibiotic concentrations). Simulate data with realistic means and SDs (make some groups similar and some different). Run a one-way ANOVA, then Tukey-Kramer post-hoc tests. Produce a ggplot2 violin plot with jittered data and add text labels (a, ab, b, etc.) above each group to indicate which are significantly different — this is standard notation in ecology and plant biology publications.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Week 9 — Monday)
+
+- Monday (Lab 20): What to do when your data violate ANOVA assumptions — non-parametric alternatives (Kruskal-Wallis and Mann-Whitney U)
+- Read **R for Data Science Ch. 12**
+- Quiz 5 is **Friday of Week 9** — covers Labs 17–20
+
+------------------------------------------------------------------------

@@ -1,0 +1,53 @@
+/* BI 255 brand accents on top of the Quarto cosmo theme */
+:root {
+  --bi255-navy: #1a3d5c;
+  --bi255-blue: #2c5f8a;
+  --bi255-gold: #b5862a;
+}
+
+.navbar {
+  background-color: var(--bi255-navy) !important;
+}
+
+.sidebar-title {
+  color: var(--bi255-navy);
+}
+
+h1, h2, h3 {
+  color: var(--bi255-navy);
+}
+
+a {
+  color: var(--bi255-blue);
+}
+
+.callout {
+  border-left-width: 4px;
+}
+
+.resource-card, .info-card, .instructor-card {
+  border: 1px solid #dce5ef;
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  background: #f4f7fa;
+}
+
+.about-grid, .resources-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.instructor-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--bi255-navy);
+  color: white;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}

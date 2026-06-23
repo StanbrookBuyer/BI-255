@@ -1,0 +1,423 @@
+---
+title: "Lab 34: Scientific Poster Preparation Workshop"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "November 23, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Communicating Science Visually
+
+A scientific poster is not a printed version of a paper. It is a **visual conversation starter** — designed to be understood in 3 minutes by someone standing a metre away, and to invite the reader to ask you questions. This lab covers the principles of poster design, how to produce publication-quality figures in R, and how to use a peer review process to improve your work before the final presentation.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Identify the key sections of a scientific poster and what goes in each
+2. Apply design principles: visual hierarchy, colour, whitespace, and font size
+3. Produce publication-quality R figures at 300 dpi with appropriate dimensions
+4. Write a poster title, summary, and conclusion that communicate to a non-specialist
+5. Give and receive constructive peer feedback using a structured rubric
+6. Export figures from R in formats suitable for PowerPoint and printing (PNG, PDF, SVG)
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Anatomy of a Scientific Poster
+
+::: callout-important
+## Standard Poster Sections
+
+**Title bar** — spans the full width. Contains: title (largest text on poster), your name, course/institution, date.
+
+**Introduction / Background** — 3–5 sentences max. What question are you answering and why does it matter? No citations needed at this level.
+
+**Methods** — brief description of your data and analysis approach. Can use a numbered list or a simple flowchart.
+
+**Results** — this is the heart of the poster. 2–4 figures, each self-contained with a caption. The figures should tell the story without extensive text.
+
+**Discussion / Conclusion** — 3–5 bullet points or 2 short paragraphs. What do your results mean? Any limitations?
+
+**References** — 3–5 key references if appropriate.
+
+**Acknowledgements** — brief (1–2 lines).
+:::
+
+```{r, echo=FALSE}
+cat('
+POSTER LAYOUT GUIDE (A0 landscape = 1189 x 841 mm)
+====================================================
+
+[          TITLE / NAME / INSTITUTION               ]
+[                                                    ]
+[ Intro  ] [   Results Fig 1  ] [  Results Fig 3   ]
+[        ] [                  ] [                  ]
+[ Methods] [   Results Fig 2  ] [  Discussion      ]
+[        ] [                  ] [                  ]
+[        ] [   (main figure)  ] [  Conclusion      ]
+
+DESIGN RULES:
+  - Title: 80–100pt font
+  - Body text: minimum 24pt (readable from 1 metre)
+  - Maximum 500 words of text on entire poster
+  - 30–40% whitespace (empty space is not wasted space)
+  - Maximum 4 colours (including black/white)
+  - Every figure must have a self-contained caption
+')
+```
+
+------------------------------------------------------------------------
+
+## Part 2: Producing Publication-Quality Figures
+
+The key difference between exploratory figures (for your own analysis) and publication/poster figures is:
+
+- Font size large enough to read when printed
+- Clean theme (no grey background)
+- Appropriate dimensions for the intended space
+- Saved at 300 dpi (print quality) or as a vector format (PDF/SVG)
+
+### Example: Polishing a Figure for a Poster
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Use a dataset that might appear in a BI 255 poster
+# Enzyme activity across three treatment groups
+set.seed(42)
+poster_df <- data.frame(
+  treatment = rep(c("Control", "Low Dose", "High Dose"), each = 20),
+  activity  = c(rnorm(20, 50, 8), rnorm(20, 72, 10), rnorm(20, 45, 12))
+)
+poster_df$treatment <- factor(poster_df$treatment,
+                               levels = c("Control", "Low Dose", "High Dose"))
+
+# Version 1: Default ggplot (NOT suitable for poster)
+ggplot(poster_df, aes(x = treatment, y = activity, fill = treatment)) +
+  geom_boxplot() +
+  labs(title = "Enzyme Activity by Treatment")
+```
+
+```{r}
+# Version 2: Publication-quality poster figure
+poster_fig <- ggplot(poster_df, aes(x = treatment, y = activity, fill = treatment)) +
+  geom_violin(trim = FALSE, alpha = 0.55) +
+  geom_boxplot(width = 0.12, fill = "white", outlier.shape = NA, linewidth = 0.8) +
+  geom_jitter(width = 0.08, size = 2, alpha = 0.6, colour = "grey30") +
+  scale_fill_manual(values = c("Control"   = "#A8C4D9",
+                               "Low Dose"  = "#2C5F8A",
+                               "High Dose" = "#C8102E")) +
+  labs(
+    title   = "Enzyme Activity Is Significantly Altered by Treatment",
+    x       = NULL,
+    y       = "Enzyme Activity (nmol/min/mg protein)",
+    caption = "n = 20 per group; one-way ANOVA, Tukey post-hoc (not shown)"
+  ) +
+  theme_classic(base_size = 18) +   # Large base font for poster
+  theme(
+    legend.position  = "none",
+    plot.title       = element_text(size = 16, face = "bold"),
+    axis.text        = element_text(size = 14),
+    axis.title.y     = element_text(size = 14),
+    plot.caption     = element_text(size = 10, colour = "grey50")
+  )
+
+poster_fig
+```
+
+```{r, eval=FALSE}
+# Save for printing (300 dpi PNG) and for importing into PowerPoint
+ggsave("enzyme_poster_figure.png",
+       plot   = poster_fig,
+       width  = 18,    # cm — size in the poster layout
+       height = 14,
+       units  = "cm",
+       dpi    = 300)
+
+# Vector format (PDF or SVG — infinitely scalable, ideal for posters)
+ggsave("enzyme_poster_figure.pdf",
+       plot   = poster_fig,
+       width  = 18, height = 14, units = "cm")
+```
+
+::: callout-tip
+## Figure Size and Resolution
+
+| Format | When to use |
+|--------|-------------|
+| PNG at 300 dpi | Standard for posters and papers; fixed resolution |
+| PDF | Vector — perfectly sharp at any size; for InDesign or Illustrator |
+| SVG | Vector — works in PowerPoint and web; editable in Inkscape |
+| TIFF at 300+ dpi | Some journals require this for submission |
+
+For a PowerPoint poster: use PNG at 300 dpi. For a professionally printed poster: use PDF or high-resolution PNG (300 dpi minimum; 600 dpi preferred for text-heavy figures).
+:::
+
+------------------------------------------------------------------------
+
+## Part 3: Writing Poster Text
+
+```{r, echo=FALSE}
+cat('
+EXAMPLE: TRANSFORMING RESULTS TEXT FOR A POSTER
+================================================
+
+PAPER VERSION (too dense for a poster):
+  "Enzyme activity was significantly elevated in the low-dose group
+   (72.3 ± 10.1 nmol/min/mg) compared to both the control group
+   (50.4 ± 8.3 nmol/min/mg; p = 0.003) and the high-dose group
+   (45.2 ± 11.8 nmol/min/mg; p < 0.001), as determined by one-way
+   ANOVA (F(2,57) = 18.4, p < 0.001) followed by Tukey-Kramer
+   post-hoc comparisons."
+
+POSTER VERSION (concise and visual):
+  Title of figure: "Low-Dose Treatment Maximises Enzyme Activity"
+  Caption: "n = 20 per group. One-way ANOVA: F(2,57) = 18.4, p < 0.001.
+            Letters indicate Tukey-Kramer post-hoc groupings."
+  The figure shows the result. The text reinforces it in one sentence.
+
+KEY RULE: If the figure caption already explains the result,
+the body text does not need to repeat it. Point to the figure.
+')
+```
+
+### Titles That Tell the Story
+
+```{r, echo=FALSE}
+cat('
+WEAK TITLE (describes what you did):
+  "Enzyme Activity Results Under Three Concentrations"
+
+STRONG TITLE (tells the main finding):
+  "Low-Dose Treatment Maximises Enzyme Activity — High Dose Is Inhibitory"
+
+A strong poster title is a headline — it gives away the answer.
+The reader should know your main finding before reading anything else.
+')
+```
+
+------------------------------------------------------------------------
+
+## Part 4: Creating a Figure Panel
+
+Many posters include a multi-panel figure. Here is how to produce a clean panel layout in R:
+
+```{r}
+# install.packages("patchwork")
+library(patchwork)
+
+# Panel A: histogram of control data
+fig_A <- ggplot(poster_df |> filter(treatment == "Control"),
+                aes(x = activity)) +
+  geom_histogram(fill = "#A8C4D9", colour = "white", bins = 10) +
+  labs(title = "A. Control Distribution",
+       x = "Enzyme Activity", y = "Count") +
+  theme_classic(base_size = 14)
+
+# Panel B: scatter-style comparison
+fig_B <- ggplot(poster_df, aes(x = treatment, y = activity, colour = treatment)) +
+  geom_jitter(width = 0.15, size = 2.5, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, colour = "black") +
+  scale_colour_manual(values = c("Control" = "#A8C4D9",
+                                 "Low Dose" = "#2C5F8A",
+                                 "High Dose" = "#C8102E")) +
+  labs(title = "B. Group Comparison",
+       x = NULL, y = "Enzyme Activity") +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "none")
+
+# Combine with patchwork
+combined_panel <- fig_A | fig_B
+combined_panel + plot_annotation(
+  title = "Figure 1. Enzyme Activity Under Three Treatment Conditions",
+  theme = theme(plot.title = element_text(size = 13, face = "bold"))
+)
+```
+
+```{r, eval=FALSE}
+# Save the panel at poster quality
+ggsave("figure1_panel.png",
+       combined_panel,
+       width = 28, height = 14, units = "cm", dpi = 300)
+```
+
+------------------------------------------------------------------------
+
+## Part 5: Peer Review Rubric
+
+Use this rubric to give structured, constructive feedback on a classmate's poster draft.
+
+```{r, echo=FALSE}
+cat('
+BI 255 POSTER PEER REVIEW RUBRIC
+==================================
+
+VISUAL DESIGN (20 pts)
+  [ ] Title is readable from 1 metre and states the main finding
+  [ ] Font size is minimum 24pt for body text
+  [ ] Figures are clearly labelled with axes and units
+  [ ] Colour palette is consistent and accessible
+  [ ] Whitespace is used well (not overcrowded)
+
+SCIENTIFIC CONTENT (40 pts)
+  [ ] Research question is clearly stated in Introduction
+  [ ] Methods are described concisely (enough to replicate the analysis)
+  [ ] Results section contains 2-4 clear, well-captioned figures
+  [ ] Statistical tests are named and results reported (F, t, p, or CI)
+  [ ] Conclusions are supported by the data shown
+
+COMMUNICATION (20 pts)
+  [ ] Poster tells a clear story from top to bottom
+  [ ] Non-specialist could understand the main finding
+  [ ] Technical jargon is defined or avoided
+  [ ] Conclusions are appropriately qualified (limitations noted)
+
+R FIGURE QUALITY (20 pts)
+  [ ] Figures were produced in R (ggplot2 or equivalent)
+  [ ] Figures show raw data (not just means/bars)
+  [ ] Font size in figures is large enough to read when printed
+  [ ] Colour scheme is consistent with poster colour palette
+
+TOTAL: ___ / 100
+
+ONE STRENGTH: _________________________________
+
+ONE SUGGESTION: ________________________________
+')
+```
+
+------------------------------------------------------------------------
+
+## Part 6: Presentation Tips
+
+::: callout-note
+## The 2-Minute Elevator Pitch
+
+When someone stops at your poster, you have approximately 2 minutes before they decide to engage or move on. Practice this structure:
+
+1. **The question** (15 seconds): "My project asked whether..."
+2. **The approach** (20 seconds): "I used data from... and analysed it with..."
+3. **The main finding** (30 seconds): "The key result was... [point to the main figure]"
+4. **Why it matters** (15 seconds): "This is important because..."
+5. **Invite a question** (40 seconds): "I'd love to hear your thoughts — especially about..."
+
+Practice this out loud at least five times before the presentation.
+:::
+
+```{r, echo=FALSE}
+cat('
+COMMON MISTAKES TO AVOID
+=========================
+
+1. Too much text — aim for a maximum of 500 words total
+2. Too many figures — 2 to 4 clear figures beat 8 cluttered ones
+3. Bar charts without raw data — show the distribution (violin, jitter)
+4. Missing units on axes — always label with units in parentheses
+5. Printing at too low resolution — minimum 300 dpi for poster printing
+6. Reading the poster out loud during presentation — talk to the person, 
+   not the poster
+7. Unexplained statistical notation — define p-values, CIs, and test names
+8. Inconsistent fonts and colours — pick a palette and stick to it
+')
+```
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** What is the minimum font size recommended for poster body text, and why?
+
+**2.** You have a beautiful regression plot saved at 72 dpi. The printed poster is A0 size. What problem will occur, and how do you fix it?
+
+**3.** Which ggplot2 theme argument produces figures with the clean appearance most appropriate for a scientific poster?
+
+    a) `theme_grey()`    b) `theme_classic()`    c) `theme_dark()`    d) `theme_void()`
+
+**4.** A strong poster figure caption should include which three elements?
+
+**5.** True or False: Saving a figure as PDF from R means it will look blurry if scaled up on a large poster.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** The minimum is **24pt** for body text on an A0 poster. The rule of thumb is that text should be readable from approximately 1 metre away. Titles should be 80–100pt, section headings 40–48pt, body text 24–28pt, and figure labels/captions at least 18–20pt. Text smaller than 24pt requires the reader to step forward, disrupting the natural flow of the poster session.
+
+**2.** A 72 dpi image will appear **pixelated / blurry** when printed at poster size. At 72 dpi, each pixel is large and visible at print resolution. Fix it by regenerating the figure with `ggsave(..., dpi = 300)` and re-exporting. Alternatively, save as PDF (vector) which is infinitely scalable with no quality loss. Never submit 72 dpi (screen resolution) images for print.
+
+**3.** b) `theme_classic()` — removes the grey background and grid lines, producing a clean white background with axis lines only. This is the standard for published biology figures. `theme_grey()` (the default) has a grey background inappropriate for print; `theme_dark()` is unsuitable; `theme_void()` removes all axes which is only appropriate for maps.
+
+**4.** A strong figure caption should include: (1) **A title sentence** stating the main finding (not just what the figure shows), (2) **Sample size and key experimental details** (n = X per group, conditions, etc.), (3) **Statistical results** (test name, test statistic, degrees of freedom, and p-value) — enough for the reader to judge the conclusion. Example: "Enzyme activity was significantly higher in the low-dose group. n = 20 per group; one-way ANOVA: F(2,57) = 18.4, p < 0.001; Tukey-Kramer post-hoc results indicated by letters."
+
+**5.** False — PDFs saved from R are **vector graphics** — they are mathematically defined curves and shapes with no pixel resolution. Vector images are perfectly sharp at any size, from a business card to a billboard. This is why PDF (or SVG) is the ideal format for poster figures. Raster formats (PNG, JPEG, TIFF) are resolution-dependent and must be saved at 300 dpi or higher for print.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 34 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] List the required sections of a scientific poster and what each contains
+- [ ] Apply `theme_classic(base_size = 18)` and appropriate colour palettes for poster figures
+- [ ] Save a figure at 300 dpi PNG and as PDF using `ggsave()`
+- [ ] Create a multi-panel figure with the `patchwork` package
+- [ ] Write a poster title that states the main finding (not just the topic)
+- [ ] Give structured peer feedback using the rubric
+- [ ] Deliver a 2-minute verbal summary of your research
+
+::: callout-tip
+## Final Poster Checklist (Take This to Your Printing Appointment)
+
+Before submitting your poster file for printing:
+
+- [ ] All text is at least 24pt
+- [ ] All figures are 300 dpi or vector (PDF/SVG)
+- [ ] Axes have units in parentheses
+- [ ] Statistical results are reported in standard format
+- [ ] No more than 4 colours in the whole poster
+- [ ] The title states your main finding
+- [ ] You have a 2-minute pitch practiced and timed
+- [ ] Poster dimensions match the required size (check Canvas)
+:::
+
+------------------------------------------------------------------------
+
+## Before the Final Presentation
+
+- Review all figure code from Labs 12–13 (ggplot2), 19 (ANOVA), 22 (regression), and whichever labs relate to your project
+- Ensure your Posit Cloud project is saved and backed up
+- Prepare questions you can ask the audience to engage them
+- Check Canvas for the final poster submission deadline and presentation schedule
+
+------------------------------------------------------------------------

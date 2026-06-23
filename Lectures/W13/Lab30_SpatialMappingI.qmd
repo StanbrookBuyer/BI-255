@@ -1,0 +1,323 @@
+---
+title: "Lab 30: Spatial Mapping in R — Part I"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "November 9, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Where Does Data Exist in Space?
+
+From tracking disease outbreaks to mapping endangered species ranges, spatial data is central to ecology, epidemiology, and conservation biology. This lab introduces the tools R provides for working with geographic data — starting with the fundamental concepts and working up to species distribution maps and environmental data overlays.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Understand coordinate reference systems (CRS) and geographic vs projected coordinates
+2. Work with simple features using the `sf` package
+3. Plot maps with `ggplot2` using `geom_sf()` and `coord_sf()`
+4. Overlay species occurrence points on a base map
+5. Download country/state boundary data with the `rnaturalearth` package
+6. Create a choropleth map coloured by a continuous variable
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Coordinate Systems — The Foundation
+
+Before any spatial analysis, you need to understand how coordinates work.
+
+```{r, echo=FALSE}
+cat('
+KEY CONCEPTS
+=============
+
+Geographic coordinates (WGS84, EPSG:4326):
+  - Longitude: degrees East/West (-180 to +180)
+  - Latitude:  degrees North/South (-90 to +90)
+  - Used for GPS data, species occurrence records (GBIF, iNaturalist)
+
+Projected coordinates (e.g., UTM, EPSG:32617 for eastern Florida):
+  - X/Y in metres from a reference point
+  - Needed for distance and area calculations
+  - Each projection distorts some property (shape, area, distance)
+
+CRS (Coordinate Reference System):
+  - Defines how coordinates relate to positions on Earth
+  - Always check that all data layers use the SAME CRS before overlaying
+  - Transform with sf::st_transform(data, crs = EPSG_code)
+')
+```
+
+------------------------------------------------------------------------
+
+## Part 2: Building a Simple Map with `sf` and `ggplot2`
+
+```{r}
+# Install required packages if not available
+# install.packages(c("sf", "rnaturalearth", "rnaturalearthdata"))
+library(sf)
+library(ggplot2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(dplyr)
+
+# Download world country boundaries (Natural Earth)
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+# Basic world map
+ggplot(world) +
+  geom_sf(fill = "#A8C4D9", colour = "white", linewidth = 0.2) +
+  coord_sf(crs = "+proj=robin") +   # Robinson projection
+  labs(title = "World Map — Robinson Projection") +
+  theme_void()
+```
+
+```{r}
+# Focus on the Americas — relevant for BCU's Florida/Caribbean context
+americas <- world[world$continent %in% c("North America",
+                                          "South America",
+                                          "Caribbean"), ]
+
+ggplot(americas) +
+  geom_sf(fill = "#2C5F8A", colour = "white", linewidth = 0.3, alpha = 0.7) +
+  coord_sf(xlim = c(-130, -30), ylim = c(-60, 75)) +
+  labs(title = "The Americas") +
+  theme_classic(base_size = 12) +
+  theme(panel.background = element_rect(fill = "#E8F4F8"))
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Plotting Species Occurrence Points
+
+Species occurrence data from GBIF (Global Biodiversity Information Facility) consists of latitude/longitude coordinates for each observation. We simulate occurrence data for the West Indian manatee (*Trichechus manatus*) — Florida's iconic marine mammal.
+
+```{r}
+set.seed(42)
+
+# Simulated manatee occurrence records (inspired by real GBIF distribution)
+# Clustered around Florida coasts, Bahamas, and Caribbean islands
+manatee_occ <- data.frame(
+  longitude = c(
+    runif(50, -83, -79.5),   # West Florida coast
+    runif(30, -81, -79),     # South Florida / Keys
+    runif(20, -77, -75),     # Bahamas
+    runif(15, -86, -83),     # Gulf of Mexico coast
+    runif(10, -64, -61)      # Caribbean (Trinidad/Tobago range)
+  ),
+  latitude = c(
+    runif(50, 24, 30),       # West coast FL
+    runif(30, 24, 26),       # S. Florida
+    runif(20, 22, 26),       # Bahamas
+    runif(15, 25, 30),       # Gulf coast
+    runif(10, 9, 12)         # Caribbean south
+  ),
+  year     = sample(2015:2024, 125, replace = TRUE),
+  source   = sample(c("Aerial survey", "Citizen science", "GPS tag"),
+                    125, replace = TRUE, prob = c(0.5, 0.35, 0.15))
+)
+
+# Convert to sf point object
+manatee_sf <- st_as_sf(manatee_occ,
+                        coords = c("longitude", "latitude"),
+                        crs    = 4326)
+
+cat("Number of occurrence records:", nrow(manatee_sf), "\n")
+cat("CRS:", st_crs(manatee_sf)$epsg, "\n")
+```
+
+```{r}
+# Base map: Caribbean and SE USA
+caribbean_map <- ne_countries(scale = "medium", returnclass = "sf") |>
+  filter(continent %in% c("North America", "South America") |
+         subregion == "Caribbean")
+
+ggplot() +
+  geom_sf(data  = caribbean_map,
+          fill  = "#C4D9A8",
+          colour = "white",
+          linewidth = 0.3) +
+  geom_sf(data   = manatee_sf,
+          aes(colour = source, shape = source),
+          size   = 2.5,
+          alpha  = 0.8) +
+  scale_colour_manual(values = c("Aerial survey"   = "#2C5F8A",
+                                 "Citizen science" = "#C8102E",
+                                 "GPS tag"         = "#5B8DB8")) +
+  coord_sf(xlim = c(-90, -58), ylim = c(7, 33)) +
+  labs(title   = "West Indian Manatee (Trichechus manatus) — Occurrence Records",
+       subtitle = "Simulated data for teaching purposes; real data via GBIF",
+       colour  = "Data source",
+       shape   = "Data source",
+       x = "Longitude", y = "Latitude") +
+  theme_classic(base_size = 12) +
+  theme(panel.background = element_rect(fill = "#D9EEF7"))
+```
+
+------------------------------------------------------------------------
+
+## Part 4: US State Map — Florida Focus
+
+```{r}
+# USA state boundaries
+usa_states <- ne_states(country = "United States of America", returnclass = "sf")
+
+# Highlight Florida
+florida     <- usa_states[usa_states$name == "Florida", ]
+
+ggplot() +
+  geom_sf(data  = usa_states,
+          fill  = "grey90",
+          colour = "white", linewidth = 0.3) +
+  geom_sf(data  = florida,
+          fill  = "#2C5F8A",
+          colour = "white", linewidth = 0.5) +
+  coord_sf(xlim = c(-88, -79), ylim = c(24, 31)) +
+  geom_sf(data   = manatee_sf[manatee_sf$source == "GPS tag", ],
+          colour  = "#C8102E",
+          size    = 3,
+          alpha   = 0.9) +
+  labs(title    = "GPS-Tagged Manatees — Florida Waters",
+       subtitle  = "Red points = GPS tag records",
+       x = "Longitude", y = "Latitude") +
+  theme_classic(base_size = 12) +
+  theme(panel.background = element_rect(fill = "#D9EEF7"))
+```
+
+------------------------------------------------------------------------
+
+## Part 5: Choropleth Map — Environmental Data by Country
+
+A **choropleth map** fills geographic areas with colour based on a continuous variable — useful for visualising species richness by country, disease burden, or environmental indices.
+
+```{r}
+# Simulate a biodiversity index for Caribbean and Central American countries
+set.seed(99)
+target_countries <- c("Jamaica", "Cuba", "Haiti", "Dominican Rep.",
+                       "Trinidad and Tobago", "Barbados", "Costa Rica",
+                       "Panama", "Guatemala", "Honduras", "Nicaragua",
+                       "El Salvador", "Belize", "Mexico", "Colombia",
+                       "Venezuela", "Guyana", "Suriname", "Puerto Rico")
+
+bio_index <- data.frame(
+  name       = target_countries,
+  richness   = round(runif(length(target_countries), 20, 95))
+)
+
+# Join to map data
+carib_bio <- caribbean_map |>
+  left_join(bio_index, by = c("name_long" = "name"))
+
+ggplot(carib_bio) +
+  geom_sf(aes(fill = richness), colour = "white", linewidth = 0.3) +
+  scale_fill_gradient(low = "#A8C4D9", high = "#1A3D5C",
+                      na.value = "grey80",
+                      name = "Species\nRichness Index") +
+  coord_sf(xlim = c(-90, -58), ylim = c(7, 27)) +
+  labs(title    = "Simulated Species Richness Index — Caribbean and Central America",
+       subtitle  = "Darker = higher biodiversity index score",
+       x = "Longitude", y = "Latitude") +
+  theme_classic(base_size = 12) +
+  theme(panel.background = element_rect(fill = "#D9EEF7"))
+```
+
+::: callout-note
+## Real Biodiversity Data Sources
+
+For real biodiversity analysis, these publicly available databases are essential:
+
+- **GBIF** (gbif.org): >2 billion species occurrence records, downloadable via the `rgbif` package
+- **iNaturalist**: citizen science observations, downloadable via GBIF
+- **IUCN Red List**: species range maps, conservation status
+- **OBIS**: Ocean Biodiversity Information System for marine species
+- **eBird**: bird occurrence records from Cornell Lab of Ornithology
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** You download species occurrence data from GBIF as latitude/longitude coordinates. What CRS are these coordinates in, and what EPSG code represents it?
+
+**2.** You have two spatial layers: species occurrence points (CRS: WGS84) and a land cover raster (CRS: UTM Zone 17N). Before overlaying them, what must you do?
+
+**3.** In `ggplot2`, which geometry function is used to plot `sf` objects?
+
+    a) `geom_polygon()`    b) `geom_map()`    c) `geom_sf()`    d) `geom_point()`
+
+**4.** What is a choropleth map and give one example of a biological variable it could display?
+
+**5.** True or False: `st_as_sf()` converts a regular data frame with longitude/latitude columns into an `sf` spatial object.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** GBIF occurrence data uses **WGS84** (World Geodetic System 1984), represented by **EPSG:4326**. This is the global geographic coordinate system used by GPS and most online mapping services. Longitude ranges from -180 to +180, latitude from -90 to +90.
+
+**2.** You must **reproject one layer to match the other** using `st_transform(layer, crs = target_crs)`. Spatial layers can only be overlaid when they share the same CRS. Typically, you would transform the occurrence points from WGS84 to UTM Zone 17N (or vice versa) so both layers use the same coordinate reference system.
+
+**3.** c) `geom_sf()` — this is the dedicated ggplot2 geometry for sf objects. It automatically handles points, lines, polygons, and multi-geometries. It pairs with `coord_sf()` for setting the coordinate reference system and map extent.
+
+**4.** A choropleth map fills geographic areas (countries, states, counties) with colour based on a numeric variable. Biological examples include: species richness by country, disease prevalence (e.g., malaria cases per 100,000) by region, forest cover percentage by state, or average annual temperature by country.
+
+**5.** True — `st_as_sf(df, coords = c("longitude", "latitude"), crs = 4326)` converts a standard R data frame with separate longitude and latitude columns into an sf object with a proper geometry column (POINT type) and the specified CRS. The original columns are combined into a single geometry field.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 30 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Explain the difference between geographic (WGS84) and projected coordinate systems
+- [ ] Download world/country boundaries with `ne_countries()` from `rnaturalearth`
+- [ ] Convert a data frame with lat/long to an sf object with `st_as_sf()`
+- [ ] Plot a map with `geom_sf()` and `coord_sf()` in ggplot2
+- [ ] Overlay species occurrence points on a background map
+- [ ] Create a choropleth map using `aes(fill = variable)` with `geom_sf()`
+
+::: callout-tip
+## Bonus Challenge
+
+Sign up for a free GBIF account at gbif.org. Search for occurrence records for a species of your choice (e.g., *Porites porites* — the finger coral, native to Florida reefs). Download the CSV file. Load it in R, filter to records with valid lat/long coordinates, convert to sf, and plot the observations on a Caribbean base map. Note any obvious gaps that might reflect sampling effort rather than true absence.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Monday, Week 14)
+
+- Monday (Lab 31): Spatial mapping Part II — interactive maps with leaflet, spatial joins, and environmental data overlays
+- **Quiz 7** was Monday of this week — if you have not submitted, check Canvas
+
+------------------------------------------------------------------------

@@ -1,0 +1,383 @@
+---
+title: "Lab 20: Kruskal-Wallis & Non-parametric Tests"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "October 12, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## When Parametric Assumptions Fail
+
+Parametric tests (t-tests, ANOVA) rest on assumptions — primarily that the data are approximately normally distributed and that group variances are roughly equal. In biology, these assumptions are frequently violated: antibiotic minimum inhibitory concentrations (MICs) span several orders of magnitude, pain scores and Likert ratings are ordinal, and ecological abundance data are heavily right-skewed with many zeroes.
+
+**Non-parametric tests** make no assumptions about the underlying distribution. They work by ranking the data and testing whether those ranks are distributed consistently across groups. They lose some statistical power relative to their parametric counterparts when assumptions are met, but they are valid across a much wider range of situations.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Decide when a non-parametric test is more appropriate than a parametric one
+2. Run the **Wilcoxon rank-sum test** (Mann-Whitney U) for two independent groups
+3. Run the **Wilcoxon signed-rank test** for paired data
+4. Run the **Kruskal-Wallis test** for three or more independent groups
+5. Apply the **Dunn test** as a post-hoc comparison after Kruskal-Wallis
+6. Explain what it means to test on ranks rather than raw values
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: When to Use Non-parametric Tests
+
+::: callout-important
+## Decision Checklist: Parametric vs Non-parametric
+
+Use **non-parametric tests** when any of these apply:
+
+- Sample size is small (n < 15–20) **and** data are clearly non-normal
+- Data are **ordinal** (ranked scales, pain scores, Likert ratings)
+- Data contain **extreme outliers** that are genuine measurements (not errors)
+- The distribution is **heavily skewed** and transformation does not help
+- Data are **proportions or counts** that cannot take negative values and cluster near a boundary
+
+Use **parametric tests** (with appropriate transformations if needed) when:
+
+- n ≥ 30 and the CLT provides approximate normality of means
+- Data are continuous and approximately symmetric
+- The normal distribution is a biologically appropriate model
+
+Non-parametric tests are not automatically safer — they are less powerful than parametric tests when assumptions are met.
+:::
+
+---
+
+## Part 2: The Wilcoxon Rank-Sum Test (Mann-Whitney U)
+
+The **Wilcoxon rank-sum test** (also called the Mann-Whitney U test — they are equivalent) compares two independent groups without assuming normality. It tests whether the two groups tend to come from the same distribution.
+
+### How It Works — Briefly
+
+1. Pool all observations from both groups and rank them from smallest to largest
+2. Sum the ranks within each group
+3. Test whether the rank sums are consistent with the two groups coming from the same distribution
+
+### Example: Minimum Inhibitory Concentrations (MICs)
+
+MICs (the lowest concentration of antibiotic that inhibits bacterial growth) are reported on a doubling scale (0.25, 0.5, 1, 2, 4, 8, 16... µg/mL) — an inherently skewed, bounded distribution unsuitable for a t-test.
+
+```{r}
+set.seed(42)
+# MICs (ug/mL) for two bacterial isolates against ciprofloxacin
+# Isolate A: susceptible  (MICs cluster at low end)
+# Isolate B: resistant    (MICs elevated)
+mic_A <- sample(c(0.03, 0.06, 0.125, 0.25, 0.5, 1),
+                size = 20, replace = TRUE,
+                prob = c(0.20, 0.30, 0.25, 0.15, 0.07, 0.03))
+
+mic_B <- sample(c(0.5, 1, 2, 4, 8, 16, 32),
+                size = 20, replace = TRUE,
+                prob = c(0.10, 0.15, 0.20, 0.25, 0.15, 0.10, 0.05))
+
+cat("Isolate A (susceptible) MICs:\n")
+sort(mic_A)
+cat("\nIsolate B (resistant) MICs:\n")
+sort(mic_B)
+```
+
+```{r}
+cat("Isolate A: median =", median(mic_A), "ug/mL\n")
+cat("Isolate B: median =", median(mic_B), "ug/mL\n")
+```
+
+```{r}
+# Visualise — notice the skewed, discrete nature of MIC data
+library(ggplot2)
+mic_df <- data.frame(
+  mic     = c(mic_A, mic_B),
+  isolate = rep(c("Isolate A (susceptible)", "Isolate B (resistant)"), each = 20)
+)
+
+ggplot(mic_df, aes(x = isolate, y = mic, colour = isolate)) +
+  geom_jitter(width = 0.15, size = 3, alpha = 0.8) +
+  stat_summary(fun = median, geom = "crossbar", width = 0.4,
+               fatten = 2, colour = "black") +
+  scale_y_log10(breaks = c(0.03, 0.06, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32)) +
+  scale_colour_manual(values = c("Isolate A (susceptible)" = "#2C5F8A",
+                                 "Isolate B (resistant)"   = "#C8102E")) +
+  labs(title = "Ciprofloxacin MICs for Two Bacterial Isolates",
+       x     = "Isolate",
+       y     = "MIC (ug/mL, log scale)") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+```{r}
+# Wilcoxon rank-sum test (two independent groups)
+# H₀: the MIC distributions of the two isolates are identical
+# H₁: one isolate tends to have higher MICs
+
+wilcox.test(mic_B, mic_A, alternative = "greater")
+```
+
+::: callout-note
+## Interpreting `wilcox.test()` Output
+
+| Element | Meaning |
+|---------|---------|
+| `W` | The Wilcoxon test statistic (sum of ranks from group 1) |
+| `p-value` | Probability of this W or more extreme if H₀ is true |
+| `alternative hypothesis` | Direction of the test you specified |
+
+A significant p-value means the two groups differ in their distributions (specifically, one tends to produce larger values). The non-parametric equivalent of the mean difference is the **median difference** or **Hodges-Lehmann estimator**.
+:::
+
+---
+
+## Part 3: The Wilcoxon Signed-Rank Test (Paired Non-parametric)
+
+When data are paired and non-normal, use the **Wilcoxon signed-rank test** instead of a paired t-test. It ranks the absolute values of the within-pair differences and accounts for their signs.
+
+```{r}
+set.seed(77)
+# Pain scores (0–10 visual analogue scale) before and after acupuncture
+# (n = 18 patients; ordinal data — non-parametric is appropriate)
+pain_before <- c(7, 8, 6, 9, 7, 5, 8, 6, 9, 7, 8, 6, 7, 5, 8, 9, 6, 7)
+pain_after  <- pain_before - sample(c(-1, 0, 1, 2, 3, 4), 18, replace = TRUE,
+                                     prob = c(0.05, 0.10, 0.20, 0.30, 0.25, 0.10))
+pain_after  <- pmax(0, pmin(10, pain_after))  # Clamp to 0-10 scale
+
+cat("Before: median =", median(pain_before), "\n")
+cat("After:  median =", median(pain_after),  "\n")
+cat("Differences (after - before):", sort(pain_after - pain_before), "\n")
+```
+
+```{r}
+# Wilcoxon signed-rank test for paired data
+# H₀: the median difference = 0 (no effect of acupuncture)
+# H₁: pain scores decrease after acupuncture
+wilcox.test(pain_after, pain_before,
+            paired      = TRUE,
+            alternative = "less")
+```
+
+```{r}
+# Visualise paired data
+pain_df <- data.frame(
+  score    = c(pain_before, pain_after),
+  timepoint = rep(c("Before", "After"), each = 18),
+  patient  = rep(1:18, 2)
+)
+pain_df$timepoint <- factor(pain_df$timepoint, levels = c("Before", "After"))
+
+ggplot(pain_df, aes(x = timepoint, y = score)) +
+  geom_line(aes(group = patient), colour = "grey70") +
+  geom_jitter(aes(colour = timepoint), width = 0.05, size = 2.5) +
+  scale_colour_manual(values = c("Before" = "#C8102E", "After" = "#2C5F8A")) +
+  labs(title = "Pain Scores Before and After Acupuncture",
+       x     = "Timepoint",
+       y     = "Pain Score (0–10 VAS)") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+---
+
+## Part 4: Kruskal-Wallis Test — Three or More Groups
+
+The **Kruskal-Wallis test** is the non-parametric equivalent of one-way ANOVA. It extends the Wilcoxon rank-sum test to three or more independent groups.
+
+### Example: Antibiotic Susceptibility Across Three Species
+
+```{r}
+set.seed(303)
+# Zone of inhibition (mm) for three bacterial species against ampicillin
+# Skewed and heterogeneous — ANOVA assumptions may not hold
+species_A <- round(rlnorm(18, meanlog = 2.8, sdlog = 0.4))
+species_B <- round(rlnorm(18, meanlog = 2.2, sdlog = 0.6))
+species_C <- round(rlnorm(18, meanlog = 3.3, sdlog = 0.3))
+
+bact_df <- data.frame(
+  zone    = c(species_A, species_B, species_C),
+  species = rep(c("Species A", "Species B", "Species C"), each = 18)
+)
+
+# Check normality
+by(bact_df$zone, bact_df$species, shapiro.test)
+```
+
+```{r}
+# Visualise
+ggplot(bact_df, aes(x = species, y = zone, fill = species)) +
+  geom_violin(trim = FALSE, alpha = 0.5) +
+  geom_jitter(aes(colour = species), width = 0.1, size = 2, alpha = 0.8) +
+  scale_fill_manual(values   = c("Species A" = "#2C5F8A",
+                                 "Species B" = "#5B8DB8",
+                                 "Species C" = "#1A3D5C")) +
+  scale_colour_manual(values = c("Species A" = "#1A3D5C",
+                                 "Species B" = "#2C5F8A",
+                                 "Species C" = "#0D2035")) +
+  labs(title = "Ampicillin Zone of Inhibition Across Three Bacterial Species",
+       x     = "Species",
+       y     = "Zone of Inhibition (mm)") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+```{r}
+# Kruskal-Wallis test
+# H₀: all three species have the same distribution of inhibition zones
+kruskal.test(zone ~ species, data = bact_df)
+```
+
+::: callout-note
+## Interpreting Kruskal-Wallis
+
+| Element | Meaning |
+|---------|---------|
+| `Kruskal-Wallis chi-squared` | The test statistic (approximately chi-squared distributed) |
+| `df` | Degrees of freedom = k − 1 (number of groups minus 1) |
+| `p-value` | Probability of this statistic or larger if all groups have the same distribution |
+
+A significant Kruskal-Wallis tells you **some** groups differ. For pairwise comparisons, use a post-hoc procedure such as Dunn's test.
+:::
+
+---
+
+## Part 5: Dunn's Test for Post-hoc Comparisons
+
+After a significant Kruskal-Wallis, use Dunn's test to identify which specific pairs of groups differ, with adjustment for multiple comparisons.
+
+```{r}
+# Install if needed: install.packages("dunn.test")
+# Alternative using base R: pairwise.wilcox.test()
+pairwise.wilcox.test(bact_df$zone, bact_df$species,
+                     p.adjust.method = "BH")   # Benjamini-Hochberg correction
+```
+
+::: callout-tip
+## Multiple Comparison Corrections
+
+| Method | When to use |
+|--------|------------|
+| `"bonferroni"` | Conservative; use when Type I error control is paramount |
+| `"BH"` (Benjamini-Hochberg) | Less conservative; better power; common in biology |
+| `"holm"` | Step-down Bonferroni; good general choice |
+
+For most biological studies, the Benjamini-Hochberg (BH) method provides a good balance between controlling false positives and maintaining power.
+:::
+
+---
+
+## Part 6: Parametric vs Non-parametric — A Side-by-Side Comparison
+
+```{r, echo=FALSE}
+cat("
+CHOOSING THE RIGHT TEST
+
+Two independent groups:
+  Normal data, equal variances → Student's t-test  (var.equal = TRUE)
+  Normal data, unequal variances → Welch's t-test  (var.equal = FALSE)
+  Non-normal or ordinal        → Wilcoxon rank-sum (wilcox.test)
+
+Two paired groups:
+  Normal differences           → Paired t-test      (paired = TRUE)
+  Non-normal or ordinal        → Wilcoxon signed-rank (wilcox.test, paired = TRUE)
+
+Three or more independent groups:
+  Normal, equal variances      → One-way ANOVA     (aov)
+  Normal, unequal variances    → Welch's ANOVA     (oneway.test, var.equal = FALSE)
+  Non-normal or ordinal        → Kruskal-Wallis    (kruskal.test)
+  Post-hoc (parametric)        → Tukey-Kramer      (TukeyHSD)
+  Post-hoc (non-parametric)    → Dunn / Wilcoxon   (pairwise.wilcox.test)
+")
+```
+
+---
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** You have pain scores (0–10 ordinal scale) from 12 patients before and after a treatment. Which test is most appropriate?
+
+    a) Paired t-test    b) Wilcoxon signed-rank test    c) Kruskal-Wallis test    d) Mann-Whitney U test
+
+**2.** Non-parametric tests work by:
+
+    a) Assuming the data follow an exponential distribution    b) Replacing raw values with their ranks and testing those    c) Removing outliers before analysis    d) Transforming the data to normality
+
+**3.** A Kruskal-Wallis test gives chi-squared(2) = 14.3, p = 0.0008. What is your next step?
+
+**4.** You apply `pairwise.wilcox.test()` with `p.adjust.method = "BH"`. What does the Benjamini-Hochberg correction do?
+
+**5.** True or False: Non-parametric tests are always preferable to parametric tests because they make fewer assumptions.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) Wilcoxon signed-rank test — Pain scores are ordinal (0–10 scale) and the sample is small (n = 12). The data are paired (same patients before and after), so you need the paired version of a non-parametric test. The Wilcoxon signed-rank test is the non-parametric equivalent of the paired t-test.
+
+**2.** b) Replacing raw values with their ranks and testing those — Non-parametric tests are rank-based. All measurements are ordered from smallest to largest and assigned ranks (1, 2, 3...). The test statistic is computed from these ranks, making it insensitive to the original scale or distribution shape.
+
+**3.** Run pairwise post-hoc comparisons to find out **which specific groups differ** — a significant Kruskal-Wallis only tells you that at least one group differs from the rest. Use `pairwise.wilcox.test()` (with an appropriate multiple-comparison correction) to identify which specific pairs are different.
+
+**4.** The Benjamini-Hochberg correction controls the **false discovery rate (FDR)** — the expected proportion of significant results that are false positives. It is less conservative than Bonferroni (which controls the probability of any false positive) but provides better power. It ranks the p-values and applies a graduated correction, allowing more true positives to survive.
+
+**5.** **False** — Non-parametric tests have **less statistical power** than parametric tests when the parametric assumptions are actually met. If your data are approximately normal and variances are equal, you should prefer parametric tests because they are more likely to detect a true effect. Non-parametric tests are preferred when assumptions are violated — not as a universal default.
+:::
+
+---
+
+## Lab 20 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] List at least three situations where a non-parametric test is more appropriate than a parametric one
+- [ ] Run `wilcox.test(x, y)` for two independent non-normal groups (Mann-Whitney U)
+- [ ] Run `wilcox.test(x, y, paired = TRUE)` for paired non-normal data
+- [ ] Run `kruskal.test(y ~ group)` for three or more groups and interpret the output
+- [ ] Apply `pairwise.wilcox.test()` as a post-hoc test after Kruskal-Wallis
+- [ ] Choose an appropriate p-value correction method and justify your choice
+- [ ] Select the correct test from the parametric/non-parametric decision framework
+
+::: callout-tip
+## Bonus Challenge
+
+A published ecology paper reports species richness (number of species) across five habitat types: urban, suburban, agricultural, secondary forest, and primary forest. Species richness data are typically non-normal (right-skewed, bounded below by 0). Simulate realistic data for all five habitat types using `rnbinom()` (negative binomial distribution) with different means. Run a Kruskal-Wallis test, then pairwise Wilcoxon tests with BH correction. Produce a violin plot and write a two-sentence ecological interpretation.
+:::
+
+---
+
+## Before Next Class (Wednesday)
+
+- Wednesday (Lab 21): Correlation and Spearman's rank correlation
+- Quiz 5 is **this Friday** — covers Labs 17–20 (strip charts, violin plots, t-tests, CIs, Levene's test, ANOVA, Tukey-Kramer, Kruskal-Wallis, and Wilcoxon tests)
+- Read **R for Data Science Ch. 12**
+
+---

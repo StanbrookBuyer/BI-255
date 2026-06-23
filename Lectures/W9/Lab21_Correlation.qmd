@@ -1,0 +1,359 @@
+---
+title: "Lab 21: Correlation & Spearman's Rank Correlation"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "October 14, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Measuring the Relationship Between Two Variables
+
+In biology, we are often interested not just in single variables but in how two continuous measurements relate to each other. Does enzyme activity increase with temperature? Does body size predict metabolic rate? Do two genes tend to be co-expressed?
+
+**Correlation** quantifies the strength and direction of a linear (or monotonic) relationship between two variables, producing a single number between -1 and +1.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Distinguish between Pearson's and Spearman's correlation coefficients
+2. Calculate and interpret `cor()` and `cor.test()` in R
+3. Visualise bivariate relationships with scatter plots and correlation matrices
+4. Identify when Pearson's correlation is inappropriate and switch to Spearman's
+5. Explain the critical difference between correlation and causation
+6. Produce a labelled correlation matrix using `corrplot`
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Pearson's Correlation Coefficient
+
+**Pearson's r** measures the strength of a linear relationship between two continuous, normally distributed variables.
+
+- r = +1: perfect positive linear relationship
+- r = 0: no linear relationship
+- r = -1: perfect negative linear relationship
+
+```{r}
+# Biological context: enzyme kinetics across temperature
+# Does substrate turnover rate (kcat) correlate with temperature (°C)?
+set.seed(42)
+temperature <- seq(10, 40, by = 2)
+kcat        <- 0.8 * temperature - 5 + rnorm(length(temperature), 0, 2.5)
+
+# Pearson's correlation
+cor(temperature, kcat, method = "pearson")
+```
+
+```{r}
+# Full hypothesis test: is the correlation significantly different from zero?
+# H₀: population correlation = 0
+# H₁: population correlation ≠ 0
+cor.test(temperature, kcat, method = "pearson")
+```
+
+```{r}
+# Visualise the relationship
+plot(temperature, kcat,
+     pch  = 16,
+     col  = "#2C5F8A",
+     cex  = 1.4,
+     xlab = "Temperature (°C)",
+     ylab = "Turnover Rate kcat (s⁻¹)",
+     main = "Enzyme Turnover Rate vs Temperature")
+abline(lm(kcat ~ temperature), col = "#C8102E", lwd = 2)
+legend("topleft",
+       legend = paste0("r = ", round(cor(temperature, kcat), 2)),
+       bty = "n", cex = 1.1)
+```
+
+::: callout-important
+## Interpreting the Correlation Test Output
+
+| Component | Meaning |
+|-----------|---------|
+| `t` | Test statistic (t = r × √(n−2) / √(1−r²)) |
+| `df` | Degrees of freedom = n − 2 |
+| `p-value` | Probability of observing r this extreme if H₀ is true |
+| `95 percent confidence interval` | Plausible range for the true population correlation |
+| `cor` | The sample Pearson correlation coefficient |
+
+A significant p-value means the correlation is unlikely to be zero in the population. It says nothing about whether the relationship is biologically meaningful — always report r alongside p.
+:::
+
+### Interpreting the Size of r
+
+```{r, echo=FALSE}
+cat("
+Rule of thumb (Cohen 1988, used in biology):
+
+|r|         Interpretation
+-----------------------------
+0.10        Small / weak
+0.30        Medium / moderate  
+0.50        Large / strong
+0.70+       Very strong
+
+Note: These are conventions, not hard rules. A 'weak' correlation
+can still be scientifically important — e.g., a gene that explains
+1% of variation in disease risk across millions of individuals.
+")
+```
+
+------------------------------------------------------------------------
+
+## Part 2: When Pearson's Is Not Appropriate
+
+Pearson's r requires that both variables are continuous and approximately normally distributed, and that the relationship is linear. These assumptions fail when:
+
+- One or both variables are ordinal (ranks, scores)
+- The relationship is monotonic but not linear (e.g., enzyme rate peaks then falls)
+- There are extreme outliers
+
+```{r}
+# Demonstrate: an outlier can dramatically change Pearson's r
+set.seed(10)
+x <- rnorm(20, mean = 50, sd = 10)
+y <- 0.7 * x + rnorm(20, 0, 5)
+
+# Add one outlier
+x_out <- c(x, 100)
+y_out <- c(y, 10)
+
+cat("Pearson's r without outlier:", round(cor(x, y), 3), "\n")
+cat("Pearson's r with outlier:   ", round(cor(x_out, y_out), 3), "\n")
+```
+
+```{r}
+par(mfrow = c(1, 2))
+plot(x, y, pch = 16, col = "#2C5F8A", main = "Without Outlier",
+     xlim = c(20, 105), ylim = c(20, 90))
+abline(lm(y ~ x), col = "#C8102E", lwd = 2)
+
+plot(x_out, y_out, pch = c(rep(16, 20), 17), col = c(rep("#2C5F8A", 20), "#C8102E"),
+     main = "With Outlier", xlim = c(20, 105), ylim = c(10, 90))
+abline(lm(y_out ~ x_out), col = "#C8102E", lwd = 2)
+par(mfrow = c(1, 1))
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Spearman's Rank Correlation
+
+**Spearman's rho (ρ)** is the non-parametric equivalent of Pearson's r. It converts both variables to ranks and then applies Pearson's formula to those ranks. It measures monotonic relationships (whether consistently increasing or decreasing) rather than strictly linear ones, and is robust to outliers and non-normal data.
+
+```{r}
+# Biological context: pain score (ordinal, 0-10 scale) vs recovery time (days)
+# Pain score is ordinal — Pearson's is not appropriate
+set.seed(55)
+pain_score    <- sample(1:10, 25, replace = TRUE)
+recovery_days <- 0.6 * pain_score + rnorm(25, 0, 1.5)
+
+# Pearson's (not ideal — pain is ordinal)
+cat("Pearson's r:    ", round(cor(pain_score, recovery_days, method = "pearson"), 3), "\n")
+
+# Spearman's (appropriate for ordinal x)
+cat("Spearman's rho:", round(cor(pain_score, recovery_days, method = "spearman"), 3), "\n")
+```
+
+```{r}
+# Spearman's correlation test with confidence interval
+cor.test(pain_score, recovery_days, method = "spearman")
+```
+
+::: callout-tip
+## Pearson vs Spearman — Which to Use?
+
+| Situation | Use |
+|-----------|-----|
+| Both variables continuous and roughly normal; relationship linear | Pearson's r |
+| One or both variables ordinal | Spearman's rho |
+| Relationship is monotonic but curved | Spearman's rho |
+| Outliers present that are real data points | Spearman's rho |
+| Small sample and normality uncertain | Spearman's rho |
+
+When in doubt, running both and comparing is informative. If they agree, report Pearson's. If they diverge substantially, investigate why and report Spearman's.
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: Correlation Matrix for Multiple Variables
+
+In biochemistry and molecular biology, you often want to know how a panel of variables inter-relate. A **correlation matrix** shows all pairwise correlations simultaneously.
+
+```{r}
+# Biochemical measurements across 30 cell lines:
+# ATP production, mitochondrial membrane potential,
+# oxygen consumption rate, reactive oxygen species (ROS), cell viability
+set.seed(123)
+n <- 30
+
+atp       <- rnorm(n, 50, 10)
+mmp       <- 0.8 * atp + rnorm(n, 0, 8)          # correlated with ATP
+ocr       <- 0.6 * atp + rnorm(n, 0, 12)          # moderately correlated
+ros       <- -0.5 * atp + rnorm(n, 60, 10)        # negatively correlated
+viability <- 0.7 * mmp - 0.3 * ros + rnorm(n, 0, 8)
+
+cell_data <- data.frame(ATP = atp, MMP = mmp, OCR = ocr,
+                         ROS = ros, Viability = viability)
+
+# Compute correlation matrix
+round(cor(cell_data, method = "pearson"), 2)
+```
+
+```{r}
+# Visualise with corrplot
+# install.packages("corrplot")
+library(corrplot)
+
+cor_matrix <- cor(cell_data, method = "pearson")
+
+corrplot(cor_matrix,
+         method  = "color",
+         type    = "upper",
+         addCoef.col = "black",
+         tl.col  = "black",
+         tl.cex  = 0.9,
+         col     = colorRampPalette(c("#C8102E", "white", "#2C5F8A"))(200),
+         title   = "Mitochondrial Bioenergetics Correlation Matrix",
+         mar     = c(0, 0, 1.5, 0))
+```
+
+::: callout-note
+## Reading a Correlation Matrix
+
+Each cell shows the correlation between the row variable and the column variable.
+
+- Deep blue: strong positive correlation
+- Deep red: strong negative correlation
+- White / light: weak or no correlation
+
+ROS and ATP show a strong negative correlation — consistent with the biology: when ATP production drops (dysfunctional mitochondria), reactive oxygen species accumulate.
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: Correlation Is Not Causation
+
+```{r}
+# Classic example in biology: both ice cream sales and drowning
+# correlate with temperature — but ice cream doesn't cause drowning.
+# Confounding variables explain many observed correlations.
+
+# Ecological example: species richness correlates with latitude.
+# Does latitude CAUSE richness? No — it correlates with temperature,
+# precipitation, and evolutionary history, which are the actual drivers.
+
+# Simulate: a third variable drives both x and y
+set.seed(77)
+temperature_env <- rnorm(40, 20, 5)                      # True driver
+plant_diversity  <- 0.9 * temperature_env + rnorm(40, 0, 3)
+insect_diversity <- 0.8 * temperature_env + rnorm(40, 0, 4)
+
+cat("Correlation between plant and insect diversity:",
+    round(cor(plant_diversity, insect_diversity), 2), "\n")
+cat("This is driven by their shared dependence on temperature,\n")
+cat("not a direct causal link between the two diversity measures.\n")
+```
+
+::: callout-warning
+## Common Correlation Fallacies
+
+**Spurious correlations** arise when two unrelated variables both trend over time or share a hidden confound. Classic examples: per-capita cheese consumption correlates r = 0.95 with deaths by bedsheet tangling (Vigen, 2015).
+
+In biology, **confounders** are everywhere: body mass correlates with almost every physiological variable, obscuring the direct effects of each on the other.
+
+When you find a strong correlation, always ask: "Is there a third variable that could explain this?"
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** A Pearson correlation gives r = 0.12, p = 0.04 with n = 300 observations. What is the most accurate interpretation?
+
+    a) The relationship is strong and significant    b) The relationship is statistically significant but very weak    c) There is no relationship because r is small    d) The result is unreliable with this sample size
+
+**2.** You are correlating patient pain scores (recorded on a 1–10 ordinal scale) with days in hospital. Which correlation method is more appropriate?
+
+    a) Pearson's r    b) Spearman's rho    c) Both are equally appropriate    d) Neither — you need a t-test
+
+**3.** In a correlation matrix, you find r = −0.74 between ROS levels and cell viability. What does this tell you?
+
+**4.** You observe a strong positive correlation (r = 0.82) between antibiotic dose and bacterial mortality in a lab study. A colleague says this proves the antibiotic kills bacteria. Is this a valid causal claim?
+
+**5.** True or False: Spearman's rho converts data to ranks before computing the correlation, making it robust to outliers.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) The relationship is statistically significant but very weak — with n = 300, the test has very high power and can detect tiny correlations. r = 0.12 means only about 1.4% of variance is shared between the two variables (r² = 0.014). Statistical significance does not equal biological importance.
+
+**2.** b) Spearman's rho — Pain scores are ordinal: the difference between a 3 and a 4 is not necessarily the same as between a 7 and an 8. Pearson's r assumes continuous interval-scale data with a linear relationship. Spearman's rho, which works on ranks, is the appropriate choice for ordinal-scale data.
+
+**3.** A correlation of r = −0.74 indicates a strong negative relationship between ROS levels and cell viability: cells with higher ROS tend to have lower viability. This is consistent with the known biology — excess reactive oxygen species damage cellular components. However, correlation alone does not establish causation; this could reflect a shared underlying process (e.g., mitochondrial dysfunction driving both).
+
+**4.** This is a valid causal claim in a controlled laboratory experiment where dose is the only variable changed — under controlled conditions with all else equal, the dose-response relationship does support a causal inference. However, in observational data the same correlation would not establish causation. The key distinction is experimental control: manipulated variables in controlled experiments can support causal claims; correlations in observational data cannot.
+
+**5.** True — Spearman's rho converts each variable to its rank order (1, 2, 3, ...) before applying Pearson's formula to the ranks. An outlier that was originally far from the bulk of the data becomes simply rank n, reducing its influence on the correlation coefficient substantially.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 21 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Explain what Pearson's r measures and its range (−1 to +1)
+- [ ] Run `cor()` for a correlation coefficient and `cor.test()` for significance testing
+- [ ] Interpret r, degrees of freedom, and the p-value from `cor.test()` output
+- [ ] Explain when Spearman's rho is preferable to Pearson's r
+- [ ] Compute a correlation matrix with `cor()` and visualise it with `corrplot`
+- [ ] Give at least one example of correlation not implying causation
+
+::: callout-tip
+## Bonus Challenge
+
+The `datasets` package in R contains `mtcars` — a dataset of car specifications. While not biological, it is useful for practice. Compute the Pearson and Spearman correlations between `mpg` (fuel efficiency) and `wt` (weight). Then compute a full correlation matrix for all numeric columns and visualise it with `corrplot`. Identify the three strongest correlations and explain why they make physical sense.
+
+Then replace the car variables with a biological analogy of your own choosing — for example, how you might design a similar multi-variable study of metabolic measurements in mice.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Monday, Week 10)
+
+- Monday (Lab 22): Simple linear regression — fitting a line, testing the slope, R², and plotting with confidence bands
+- Read **R for Data Science Ch. 23**
+- Quiz 6 is **Friday of Week 10** — covers correlation, regression, contingency tests, and HWE (Labs 21–24)
+
+------------------------------------------------------------------------

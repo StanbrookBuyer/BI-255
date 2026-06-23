@@ -1,0 +1,333 @@
+---
+title: "Lab 27: Measuring Species Diversity in R — Part II"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "November 2, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Comparing Communities and Understanding Composition
+
+Lab 26 covered diversity *within* a single site. Now we ask: how do communities differ from each other, and how do we compare diversity fairly when sample sizes differ? This lab introduces rarefaction, diversity comparisons across sites, and non-metric multidimensional scaling (NMDS) — a technique for visualising community composition in two dimensions.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Explain why rarefaction is needed when sample sizes differ between sites
+2. Produce and interpret rarefaction curves with `vegan::rarecurve()`
+3. Compare Shannon diversity across sites using Kruskal-Wallis and pairwise tests
+4. Explain the concept of beta diversity (turnover between sites)
+5. Produce an NMDS ordination plot with `vegan::metaMDS()`
+6. Overlay environmental gradients on an NMDS plot
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: The Sampling Problem — Why Rarefaction?
+
+Comparing species richness between sites is only fair when sampling effort is equal. A site where you counted 1000 individuals will almost always appear richer than one where you counted 50 — not because it is more diverse, but because rare species are more likely to be detected with greater effort.
+
+```{r}
+# Demonstrate: richness increases with sample size
+set.seed(42)
+
+# Simulate a community with 30 species, log-normal abundance distribution
+true_abundance <- round(rlnorm(30, meanlog = 3, sdlog = 1.2))
+true_abundance <- sort(true_abundance, decreasing = TRUE)
+species_pool   <- rep(paste0("Sp", 1:30), times = true_abundance)
+
+# Draw samples of increasing size and count species found
+sample_sizes <- c(10, 20, 50, 100, 200, 500, 1000)
+richness_found <- sapply(sample_sizes, function(n) {
+  samp <- sample(species_pool, min(n, length(species_pool)), replace = FALSE)
+  length(unique(samp))
+})
+
+plot(sample_sizes, richness_found,
+     type = "b", pch = 16, col = "#2C5F8A",
+     xlab = "Number of Individuals Sampled",
+     ylab = "Species Detected",
+     main = "Species Accumulation Curve")
+abline(h = 30, col = "#C8102E", lty = 2)
+legend("bottomright", c("Observed", "True richness = 30"),
+       col = c("#2C5F8A", "#C8102E"), lty = c(1, 2), bty = "n")
+```
+
+::: callout-important
+## The Solution: Rarefaction
+
+Rarefaction standardises sample sizes by asking: "How many species would we expect to find if we randomly drew only n individuals from this site?" It mathematically downsamples larger collections to a common sample size, making richness comparisons fair.
+
+The rarefaction sample size is typically set to the smallest sample in the comparison.
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: Rarefaction Curves
+
+```{r}
+library(vegan)
+
+# Simulate four forest sites with different sampling effort and true diversity
+set.seed(7)
+site_data <- matrix(
+  c(rmultinom(1, 500, prob = runif(20)),   # Site 1: n=500, 20 spp
+    rmultinom(1, 150, prob = runif(20)),   # Site 2: n=150, 20 spp (under-sampled)
+    rmultinom(1, 400, prob = c(runif(12), rep(0, 8))),  # Site 3: n=400, only 12 spp
+    rmultinom(1, 350, prob = runif(18))),  # Site 4: n=350, 18 spp
+  nrow = 4, byrow = TRUE
+)
+colnames(site_data) <- paste0("Sp", 1:20)
+rownames(site_data) <- paste0("Site_", 1:4)
+
+# Raw species richness (unfair comparison)
+specnumber(site_data)
+```
+
+```{r}
+# Rarefaction curves — each curve shows expected richness at n individuals
+rarecurve(site_data,
+          step   = 10,
+          col    = c("#2C5F8A", "#C8102E", "#5B8DB8", "#A8C4D9"),
+          lwd    = 2,
+          xlab   = "Number of Individuals",
+          ylab   = "Expected Species Richness",
+          main   = "Rarefaction Curves for Four Forest Sites",
+          label  = TRUE)
+
+# Vertical line at minimum sample size
+abline(v = min(rowSums(site_data)), col = "grey40", lty = 2)
+```
+
+```{r}
+# Rarefied richness at the minimum sample size
+min_n <- min(rowSums(site_data))
+cat("Minimum sample size:", min_n, "\n\n")
+cat("Rarefied species richness at n =", min_n, ":\n")
+print(rarefy(site_data, sample = min_n))
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Comparing Diversity Across Replicate Sites
+
+To statistically compare diversity indices between habitat types, we need replicate plots within each habitat.
+
+```{r}
+set.seed(99)
+
+# Simulate three habitat types with 8 replicate 1-ha plots each
+# Habitat: pristine forest, disturbed forest, agricultural edge
+generate_community <- function(n_plots, n_spp, total_ind, dominance_factor) {
+  sapply(1:n_plots, function(i) {
+    probs <- runif(n_spp)^dominance_factor   # Higher = more dominance
+    rmultinom(1, total_ind, prob = probs / sum(probs))
+  })
+}
+
+pristine   <- t(generate_community(8, 25, 300, 1))
+disturbed  <- t(generate_community(8, 25, 300, 2.5))
+agri_edge  <- t(generate_community(8, 25, 300, 4))
+
+h_pristine  <- diversity(pristine,  "shannon")
+h_disturbed <- diversity(disturbed, "shannon")
+h_agri      <- diversity(agri_edge, "shannon")
+
+diversity_df <- data.frame(
+  H       = c(h_pristine, h_disturbed, h_agri),
+  Habitat = rep(c("Pristine Forest", "Disturbed Forest", "Agricultural Edge"),
+                each = 8)
+)
+diversity_df$Habitat <- factor(diversity_df$Habitat,
+                                levels = c("Pristine Forest", "Disturbed Forest", "Agricultural Edge"))
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(diversity_df, aes(x = Habitat, y = H, fill = Habitat)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.1, size = 2.5, alpha = 0.8) +
+  scale_fill_manual(values = c("Pristine Forest"   = "#2C5F8A",
+                               "Disturbed Forest"  = "#5B8DB8",
+                               "Agricultural Edge" = "#C8102E")) +
+  labs(title = "Shannon Diversity Across Habitat Types",
+       x     = NULL, y = "Shannon H'") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+```{r}
+# Kruskal-Wallis test (non-parametric — suitable for small n per group)
+kruskal.test(H ~ Habitat, data = diversity_df)
+```
+
+```{r}
+# Pairwise comparisons with Benjamini-Hochberg correction
+pairwise.wilcox.test(diversity_df$H, diversity_df$Habitat,
+                     p.adjust.method = "BH")
+```
+
+------------------------------------------------------------------------
+
+## Part 4: Beta Diversity — Turnover Between Sites
+
+**Alpha diversity** is diversity within a site. **Beta diversity** measures how much community composition changes between sites — i.e., turnover.
+
+```{r}
+# Bray-Curtis dissimilarity: 0 = identical communities, 1 = completely different
+all_sites <- rbind(pristine, disturbed, agri_edge)
+rownames(all_sites) <- c(paste0("Pris_", 1:8),
+                         paste0("Dist_", 1:8),
+                         paste0("Agri_", 1:8))
+
+bray_dist <- vegdist(all_sites, method = "bray")
+
+# Mean within-group and between-group dissimilarity
+dist_matrix <- as.matrix(bray_dist)
+
+cat("Mean Bray-Curtis dissimilarity:\n")
+cat("  Within Pristine:    ",
+    round(mean(dist_matrix[1:8, 1:8][upper.tri(dist_matrix[1:8, 1:8])]), 3), "\n")
+cat("  Within Agricultural:",
+    round(mean(dist_matrix[17:24, 17:24][upper.tri(dist_matrix[17:24, 17:24])]), 3), "\n")
+cat("  Pristine vs Agri:   ",
+    round(mean(dist_matrix[1:8, 17:24]), 3), "\n")
+```
+
+------------------------------------------------------------------------
+
+## Part 5: NMDS Ordination
+
+**Non-metric multidimensional scaling (NMDS)** takes a dissimilarity matrix and places communities in 2D space so that their distances on the plot reflect their dissimilarity in species composition. Closer points = more similar communities.
+
+```{r}
+# Run NMDS on the full community matrix
+set.seed(42)
+nmds_result <- metaMDS(all_sites,
+                        distance = "bray",
+                        k        = 2,   # 2 dimensions
+                        trymax   = 50)
+
+cat("NMDS stress:", round(nmds_result$stress, 3), "\n")
+cat("Stress < 0.10 = good; < 0.20 = acceptable; > 0.20 = suspect\n")
+```
+
+```{r}
+# Extract site scores (coordinates in ordination space)
+scores_df <- as.data.frame(scores(nmds_result, display = "sites"))
+scores_df$Habitat <- rep(c("Pristine Forest", "Disturbed Forest", "Agricultural Edge"),
+                          each = 8)
+
+ggplot(scores_df, aes(x = NMDS1, y = NMDS2, colour = Habitat, shape = Habitat)) +
+  geom_point(size = 3.5, alpha = 0.9) +
+  stat_ellipse(level = 0.80, linewidth = 0.8) +
+  scale_colour_manual(values = c("Pristine Forest"   = "#2C5F8A",
+                                 "Disturbed Forest"  = "#5B8DB8",
+                                 "Agricultural Edge" = "#C8102E")) +
+  labs(title    = "NMDS Ordination — Bird Community Composition",
+       subtitle  = paste0("Bray-Curtis dissimilarity; stress = ",
+                          round(nmds_result$stress, 3)),
+       x        = "NMDS Axis 1",
+       y        = "NMDS Axis 2") +
+  theme_classic(base_size = 13)
+```
+
+::: callout-note
+## Interpreting an NMDS Plot
+
+- Axes have no inherent biological meaning — only the distances between points matter
+- Points from the same habitat cluster together if communities are similar
+- Widely separated clusters indicate distinct community composition (high beta diversity)
+- Ellipses show 80% confidence regions for each group
+- Low stress (< 0.10) means the 2D representation faithfully captures the true high-dimensional dissimilarity
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** You survey birds at two sites: Site A (n = 50 individuals, 12 species) and Site B (n = 200 individuals, 18 species). Why is it unfair to conclude that Site B is more species-rich?
+
+**2.** A rarefaction curve for Site C continues to rise steeply even at the maximum sample size, while Site D's curve levels off completely. What does this tell you about each site?
+
+**3.** On an NMDS plot with stress = 0.24, how should you interpret the ordination?
+
+    a) The 2D plot faithfully represents community dissimilarity    b) The ordination should be trusted — 0.24 is excellent    c) The 2D representation is poor — consider 3D or different methods    d) The communities are more similar than they appear
+
+**4.** You calculate Bray-Curtis dissimilarity between two plots and get 0.93. What does this mean?
+
+**5.** True or False: Alpha diversity is a measure of community turnover between sites.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** Richness comparisons are only fair at equal sampling effort. Site B counted 4× more individuals, making it much more likely to detect rare species. By chance alone, sampling 200 individuals from the same community as Site A would yield more species than sampling 50. Rarefaction is needed: standardise both sites to n = 50 individuals and compare rarefied richness.
+
+**2.** Site C's curve still rising = it has not been sampled adequately; there are likely more species present than detected. Sampling more individuals would reveal additional species. Site D's curve levelling off = the site is well-sampled; you have likely detected nearly all species present. Asymptotic curves indicate sampling is sufficient for richness estimation.
+
+**3.** c) The 2D representation is poor — NMDS stress > 0.20 is generally considered suspect. The 2D plot cannot faithfully represent the true high-dimensional community dissimilarity. Options include: running NMDS in 3D (k = 3), trying different distance measures, or using alternative ordination methods (e.g., PCoA).
+
+**4.** Bray-Curtis dissimilarity of 0.93 (on a 0–1 scale) indicates the two plots share almost no species in common — their communities are 93% dissimilar. Ecologically, this is extremely high turnover, suggesting the two plots are in very different environments or represent very different successional stages.
+
+**5.** False — Alpha diversity is diversity **within** a site. **Beta diversity** measures turnover or compositional change **between** sites. Beta diversity can be quantified with dissimilarity indices (e.g., Bray-Curtis) or visualised with NMDS ordination.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 27 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Explain why rarefaction is needed for fair richness comparisons
+- [ ] Produce rarefaction curves with `rarecurve()` and rarefied richness with `rarefy()`
+- [ ] Compare Shannon H' across habitats with Kruskal-Wallis and pairwise Wilcoxon tests
+- [ ] Calculate Bray-Curtis dissimilarity with `vegdist(method = "bray")`
+- [ ] Run `metaMDS()` and check the stress value
+- [ ] Produce a labelled NMDS scatter plot with `ggplot2` and interpret clustering
+
+::: callout-tip
+## Bonus Challenge
+
+Using the `vegan` BCI dataset (50 plots, tropical tree species), run an NMDS ordination. Overlay species scores on the plot using `scores(nmds, "species")` — which species appear to drive the differences between plots? Are there any obvious gradients? As a challenge, use `envfit()` to test whether plot coordinates (plot number) correlate significantly with the ordination axes.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Wednesday)
+
+- Wednesday (Lab 28): Building interactive web apps in R with Shiny
+- Friday (Lab 29): Dose-response curves and IC50 calculation in pharmacology
+- **Quiz 7** is Monday of Week 13 — covers Labs 25–29
+
+------------------------------------------------------------------------

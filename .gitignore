@@ -1,0 +1,23 @@
+# Quarto build artifacts
+/_site/
+/.quarto/
+
+# macOS
+.DS_Store
+
+# Large / non-publishable course assets
+*.docx
+*.imscc
+Lectures.zip
+/Scripts/
+
+# R
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+**/*.quarto_ipynb
+
+# Local Claude Code settings
+.claude/

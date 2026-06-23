@@ -1,0 +1,11 @@
+"amino_acid","abbrev_3","abbrev_1","classification","molecular_weight_gmol","isoelectric_point","hydrophobicity_kd","num_codons","essential"
+"Arginine","Arg","R","positively_charged",174.2,10.76,-4.5,6,TRUE
+"Histidine","His","H","positively_charged",155.16,7.59,-3.2,2,TRUE
+"Isoleucine","Ile","I","nonpolar_aliphatic",131.17,5.98,4.5,3,TRUE
+"Leucine","Leu","L","nonpolar_aliphatic",131.17,5.98,3.8,6,TRUE
+"Lysine","Lys","K","positively_charged",146.19,9.74,-3.9,2,TRUE
+"Methionine","Met","M","nonpolar_aliphatic",149.21,5.74,1.9,1,TRUE
+"Phenylalanine","Phe","F","aromatic",165.19,5.48,2.8,2,TRUE
+"Threonine","Thr","T","polar_uncharged",119.12,5.6,-0.7,4,TRUE
+"Tryptophan","Trp","W","aromatic",204.23,5.89,-0.9,1,TRUE
+"Valine","Val","V","nonpolar_aliphatic",117.15,5.97,4.2,4,TRUE

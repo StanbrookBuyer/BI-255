@@ -1,0 +1,469 @@
+---
+title: "Lab 7: Dates & Times; The Apply Family"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "September 2, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Dates, Times & the Apply Family — with MLB Data
+
+Baseball has more data than almost any other sport — games played every day for six months, timestamps on every pitch, player performance tracked by date. Today we learn how to work with **dates and times** in R, and how to apply functions efficiently across rows, columns, or groups using the **apply family**.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Create and format dates using `as.Date()` and `format()`
+2. Calculate time differences between dates
+3. Extract components from dates (month, year, day of week)
+4. Use `apply()` on matrices
+5. Use `lapply()` and `sapply()` on lists and vectors
+6. Use `tapply()` to calculate group summaries
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Working with Dates
+
+In R, dates are a special data type. They look like text but behave like numbers — you can subtract them, compare them, and extract parts.
+
+### Creating Dates with `as.Date()`
+
+```{r}
+# The 2026 MLB season Opening Day
+opening_day <- as.Date("2026-03-26")
+opening_day
+class(opening_day)
+```
+
+::: callout-important
+## The Standard Date Format in R
+R expects dates in **YYYY-MM-DD** format (year-month-day) by default. This is called ISO 8601 format.
+
+-  `"2026-09-01"` — works perfectly
+-  `"Sept 1, 2026"` — R won't understand this without extra instructions
+-  `"09/01/2026"` — you need to specify the format
+
+If your date is in a different format, use the `format` argument:
+```r
+as.Date("09/01/2026", format = "%m/%d/%Y")
+```
+:::
+
+```{r}
+# Key MLB 2026 season dates
+spring_training <- as.Date("2026-02-14")
+opening_day     <- as.Date("2026-03-26")
+all_star_game   <- as.Date("2026-07-14")
+playoff_start   <- as.Date("2026-10-01")
+world_series    <- as.Date("2026-10-21")
+```
+
+### Calculating Time Differences
+
+```{r}
+# How many days from Opening Day to the All-Star Game?
+all_star_game - opening_day
+```
+
+```{r}
+# How many days is the regular season?
+as.numeric(playoff_start - opening_day)
+```
+
+```{r}
+# Days between Spring Training and World Series
+as.numeric(world_series - spring_training)
+```
+
+::: callout-tip
+## `as.numeric()` on Date Differences
+When you subtract two dates, R returns a "difftime" object. Wrapping it in `as.numeric()` gives you a plain number (in days) that you can use in calculations.
+:::
+
+### Today's Date
+
+```{r}
+# Sys.Date() gives today's date automatically
+today <- Sys.Date()
+today
+
+# How many days until the World Series?
+as.numeric(world_series - today)
+```
+
+------------------------------------------------------------------------
+
+## Part 2: Formatting and Extracting Date Components
+
+The `format()` function lets you display dates in any way you like, and extract specific components:
+
+```{r}
+# Display opening day in a friendly format
+format(opening_day, "%B %d, %Y")      # "March 26, 2026"
+```
+
+```{r}
+format(opening_day, "%m/%d/%Y")       # "03/26/2026"
+```
+
+```{r}
+format(opening_day, "%A")             # Day of the week
+```
+
+::: callout-note
+## Date Format Codes
+
+| Code | Meaning | Example |
+|------|---------|---------|
+| `%Y` | 4-digit year | 2026 |
+| `%y` | 2-digit year | 26 |
+| `%m` | Month (number) | 03 |
+| `%B` | Month (full name) | March |
+| `%b` | Month (abbreviated) | Mar |
+| `%d` | Day of month | 26 |
+| `%A` | Day of week (full) | Thursday |
+| `%a` | Day of week (abbreviated) | Thu |
+:::
+
+```{r}
+# Extract just the month number
+as.numeric(format(opening_day, "%m"))    # 3 = March
+```
+
+```{r}
+# What month is the World Series?
+format(world_series, "%B %Y")
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Working with Sequences of Dates
+
+```{r}
+# Generate all game dates for the first week of the 2026 MLB season
+first_week <- seq(from = opening_day,
+                  to   = opening_day + 6,
+                  by   = "day")
+first_week
+```
+
+```{r}
+# Show day names for the first week
+format(first_week, "%A %b %d")
+```
+
+```{r}
+# Generate monthly milestones through the season
+monthly <- seq(from = opening_day,
+               to   = playoff_start,
+               by   = "month")
+format(monthly, "%B %d, %Y")
+```
+
+------------------------------------------------------------------------
+
+## Part 4: The Apply Family
+
+The apply family of functions lets you apply the same function to many things at once — without writing a repetitive loop. This is very important in biology when you have many samples, genes, or games to process.
+
+### `apply()` — For Matrices (Rows or Columns)
+
+```{r}
+# Season stats matrix for 5 Dodgers players
+# Columns: Batting Average, Home Runs, RBIs, Stolen Bases
+dodgers_stats <- matrix(
+  c(0.312, 32, 95, 8,
+    0.285, 28, 87, 22,
+    0.301, 19, 74, 35,
+    0.267, 41, 108, 3,
+    0.320, 12, 58, 44),
+  nrow  = 5,
+  byrow = TRUE
+)
+rownames(dodgers_stats) <- c("Betts", "Freeman", "Hernandez", "Muncy", "Outman")
+colnames(dodgers_stats) <- c("AVG", "HR", "RBI", "SB")
+
+dodgers_stats
+```
+
+```{r}
+# apply() syntax: apply(matrix, MARGIN, function)
+# MARGIN = 1 means apply to each ROW
+# MARGIN = 2 means apply to each COLUMN
+
+# Average value for each stat (column averages)
+apply(dodgers_stats, 2, mean)
+```
+
+```{r}
+# Total for each player across all stats (not meaningful here, but shows the concept)
+apply(dodgers_stats, 1, sum)
+```
+
+```{r}
+# Which player has the highest value in each stat?
+apply(dodgers_stats, 2, which.max)
+```
+
+::: callout-tip
+## Remember: MARGIN = 1 (Rows) or 2 (Columns)?
+A handy way to remember:
+- **1** = rows → think of the **1st dimension**
+- **2** = columns → think of the **2nd dimension**
+
+Or: "1 goes across, 2 goes down"
+:::
+
+------------------------------------------------------------------------
+
+### `sapply()` — Apply to a Vector or List, Get Simple Output
+
+`sapply()` applies a function to each element of a vector or list and tries to return a simple result (a vector or matrix):
+
+```{r}
+# Player names vector
+players <- c("Mookie Betts", "Freddie Freeman", "Miguel Rojas",
+              "Max Muncy", "James Outman")
+
+# Apply nchar() to get the length of each player's name
+sapply(players, nchar)
+```
+
+```{r}
+# Calculate the square root of each HR total
+hr_totals <- c(32, 28, 19, 41, 12)
+sapply(hr_totals, sqrt)
+```
+
+```{r}
+# Custom function: categorize HR totals
+hr_category <- function(hr) {
+  if (hr >= 35) return("Power Hitter")
+  if (hr >= 20) return("Average Power")
+  return("Contact Hitter")
+}
+
+sapply(hr_totals, hr_category)
+```
+
+::: callout-note
+## Writing Your Own Functions
+You just saw R let you define your own function with `function() { }`. We'll go deeper into custom functions in future labs, but notice how natural the syntax is:
+
+```r
+my_function <- function(input) {
+  # do something with input
+  return(result)
+}
+```
+:::
+
+------------------------------------------------------------------------
+
+### `lapply()` — Apply to a List, Always Return a List
+
+`lapply()` is like `sapply()` but always returns a **list** (useful when results have different lengths):
+
+```{r}
+# A list of game scores for 3 Dodgers games
+game_scores <- list(
+  game_1 = c(7, 2, 4, 0, 3, 1, 2, 0, 0),   # Runs per inning
+  game_2 = c(0, 0, 3, 5, 0, 2, 0, 1, 2),
+  game_3 = c(1, 1, 0, 0, 4, 0, 3, 2, 1)
+)
+
+# Calculate total runs in each game
+lapply(game_scores, sum)
+```
+
+```{r}
+# Use sapply to get a simpler vector output
+sapply(game_scores, sum)
+```
+
+```{r}
+# Which inning did they score the most runs in each game?
+sapply(game_scores, which.max)
+```
+
+------------------------------------------------------------------------
+
+### `tapply()` — Apply by Group
+
+`tapply()` is extremely useful in biology and sports: it applies a function to a variable **split by a grouping variable**.
+
+```{r}
+# MLB player data: batting average by position
+mlb_players <- data.frame(
+  player   = c("Betts", "Freeman", "Turner", "Muncy",
+                "Smith", "Outman", "Hernandez", "Barnes", "Buehler"),
+  position = c("OF", "1B", "SS", "3B",
+                "C", "OF", "2B", "C", "SP"),
+  avg      = c(0.312, 0.285, 0.271, 0.267,
+                0.250, 0.320, 0.301, 0.239, 0.098),
+  hr       = c(32, 28, 15, 41, 18, 12, 19, 11, 2)
+)
+
+# Average batting average by position
+tapply(mlb_players$avg, mlb_players$position, mean)
+```
+
+```{r}
+# Total home runs by position
+tapply(mlb_players$hr, mlb_players$position, sum)
+```
+
+::: callout-tip
+## `tapply()` in Biology
+`tapply()` is exactly what you use to compare groups in biology — e.g., average gene expression in treatment vs. control, or species richness in disturbed vs. undisturbed habitats. This pattern is at the heart of almost all biological data analysis.
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: Putting It All Together
+
+Let's analyze a simulated MLB pitch dataset combining dates and apply functions:
+
+```{r}
+# Simulated pitching data for 3 Dodgers starting pitchers over 6 starts each
+set.seed(123)
+pitching <- data.frame(
+  pitcher     = rep(c("Buehler", "Kershaw", "May"), each = 6),
+  start_date  = as.Date(c("2026-04-05","2026-04-11","2026-04-17",
+                           "2026-04-23","2026-04-29","2026-05-05",
+                           "2026-04-06","2026-04-12","2026-04-18",
+                           "2026-04-24","2026-04-30","2026-05-06",
+                           "2026-04-07","2026-04-13","2026-04-19",
+                           "2026-04-25","2026-05-01","2026-05-07")),
+  innings     = c(6.0, 5.2, 7.0, 6.1, 5.0, 6.2,
+                  7.0, 7.1, 6.0, 8.0, 5.2, 7.0,
+                  5.0, 6.0, 5.1, 6.2, 4.1, 5.0),
+  earned_runs = c(3, 4, 1, 2, 5, 3, 2, 1, 3, 0, 4, 2, 4, 3, 5, 2, 6, 4)
+)
+
+# Calculate ERA per start: ERA = (earned_runs / innings) * 9
+pitching$era_per_start <- round((pitching$earned_runs / pitching$innings) * 9, 2)
+
+# Average ERA by pitcher using tapply
+cat("Average ERA by Pitcher:\n")
+tapply(pitching$era_per_start, pitching$pitcher, mean)
+```
+
+```{r}
+# Which month do most starts occur in?
+pitching$month <- format(pitching$start_date, "%B")
+table(pitching$month)
+```
+
+```{r}
+# Visualize ERA by pitcher
+boxplot(era_per_start ~ pitcher, data = pitching,
+        col  = c("#005A9C", "#EF3E42", "#A5ACAF"),  # Dodger colors
+        ylab = "ERA per Start",
+        xlab = "Pitcher",
+        main = "Starting Pitcher ERA Distribution\nLos Angeles Dodgers, Spring 2026")
+abline(h = 4.50, col = "red", lty = 2)
+text(0.5, 4.7, "4.50 ERA threshold", col = "red", cex = 0.8, adj = 0)
+```
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** Which of these correctly creates a date in R?
+
+    a) `as.Date("July 4, 2026")`  &nbsp;&nbsp; b) `as.Date("2026-07-04")`  &nbsp;&nbsp; c) `date("04/07/2026")`  &nbsp;&nbsp; d) `"2026-07-04"`
+
+**2.** You subtract two date objects: `as.Date("2026-10-31") - as.Date("2026-09-01")`. What type of result does R return, and how would you convert it to a plain number?
+
+**3.** In `apply(my_matrix, 2, mean)`, what does the `2` refer to?
+
+    a) Apply to every 2nd row  &nbsp;&nbsp; b) Apply to columns  &nbsp;&nbsp; c) Apply to rows  &nbsp;&nbsp; d) Apply the function twice
+
+**4.** What is the main difference between `sapply()` and `lapply()`?
+
+**5.** Which function from the apply family would you use to calculate the average score **separately for each team** in a data frame?
+
+    a) `apply()`  &nbsp;&nbsp; b) `lapply()`  &nbsp;&nbsp; c) `sapply()`  &nbsp;&nbsp; d) `tapply()`
+
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) `as.Date("2026-07-04")` — R's default date format is **YYYY-MM-DD** (ISO 8601). Other formats require you to specify `format = "%m/%d/%Y"` etc.
+
+**2.** R returns a **difftime** object. Wrap it in `as.numeric()` to get a plain number of days: `as.numeric(as.Date("2026-10-31") - as.Date("2026-09-01"))` → `60`.
+
+**3.** b) Apply to columns — In `apply()`, MARGIN = 1 applies to **rows**, MARGIN = 2 applies to **columns**. Here, `mean` is calculated for each column of the matrix.
+
+**4.** `sapply()` tries to simplify the output to a **vector or matrix**. `lapply()` always returns a **list**. Use `sapply()` when you want a clean vector; use `lapply()` when results might have different lengths.
+
+**5.** d) `tapply()` — This function applies a function to a variable **split by a grouping variable**, making it ideal for group-wise summaries like average score per team.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 7 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Create a date with `as.Date()` in YYYY-MM-DD format
+- [ ] Calculate the number of days between two dates
+- [ ] Use `format()` to display dates in different formats
+- [ ] Extract date components (month, day, weekday)
+- [ ] Use `apply()` with MARGIN = 1 (rows) and 2 (columns)
+- [ ] Use `sapply()` to apply a function to a vector
+- [ ] Use `lapply()` when the output is a list
+- [ ] Use `tapply()` to get group summaries
+
+::: callout-tip
+## Bonus Challenge
+Create a data frame of any sports team's game schedule with at least 10 dates. Use `format()` to find the day of the week for each game. Use `tapply()` to calculate the average score on weekday games vs. weekend games (hint: Saturday and Sunday are weekends).
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class 
+
+- Monday is **Labor Day — No Class** ️
+- **Wednesday Sep 9** (Lab 8): Hypothesis Testing & the Null Hypothesis
+- Read **Intro2r Ch. 4** 
+- Remember: **Quiz 2 is Friday Sep 4** — covers Labs 3–7
+
+::: callout-important
+## Quiz 2 — This Friday!
+Topics covered: sequences, vectors, missing values, data frames, matrices, subsetting, dates, and apply functions.
+
+Best way to prepare: open a new Quarto document and try to reproduce the key examples from Labs 3–7 from memory.
+:::
+

@@ -1,0 +1,369 @@
+---
+title: "Lab 18: Confidence Intervals (Paired & Independent) & Levene's Test"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "October 7, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Beyond the p-value: Confidence Intervals and Variance Assumptions
+
+A p-value tells you whether an effect is statistically significant. A **confidence interval** tells you how large the effect is and how precisely it is estimated. In modern biological research, confidence intervals are considered more informative than p-values alone — they show magnitude, direction, and uncertainty in one picture.
+
+This lab also addresses a key assumption of the standard t-test — that the two groups have equal variances — and introduces **Levene's test** to check it.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Extract and interpret 95% confidence intervals from `t.test()` output
+2. Plot confidence intervals with error bars in ggplot2
+3. Understand why CIs are more informative than p-values alone
+4. Test for equal variances with Levene's test using the `car` package
+5. Choose between Student's t-test and Welch's t-test based on variance structure
+6. Interpret a CI for a mean difference in biological terms
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Confidence Intervals — What They Actually Mean
+
+A **95% confidence interval** (CI) is a range computed from sample data such that, if we repeated the sampling procedure many times, 95% of the resulting intervals would contain the true population parameter.
+
+::: callout-important
+## The Correct Interpretation
+
+**Correct**: "We are 95% confident that the true mean falls between [lower] and [upper]."
+
+**Incorrect**: "There is a 95% probability that the true mean is in this interval."
+
+The true mean is a fixed (unknown) value — it is not a random variable. The interval is what varies from sample to sample. Once you have computed a specific interval, it either contains the true mean or it does not.
+
+In practice, the distinction rarely matters for scientific interpretation — but precision in language is a hallmark of careful science.
+:::
+
+### Demonstrating Coverage
+
+```{r}
+set.seed(42)
+# Simulate 100 experiments: sample from N(50, 8) and compute 95% CI each time
+true_mean <- 50
+sigma     <- 8
+n         <- 25
+n_exp     <- 100
+
+# Run 100 experiments
+results <- replicate(n_exp, {
+  samp <- rnorm(n, mean = true_mean, sd = sigma)
+  ci   <- t.test(samp)$conf.int
+  c(lower = ci[1], upper = ci[2], mean = mean(samp))
+}, simplify = "matrix")
+
+results <- as.data.frame(t(results))
+
+# How many intervals captured the true mean?
+coverage <- mean(results$lower <= true_mean & results$upper >= true_mean)
+cat("True mean =", true_mean, "\n")
+cat("Fraction of CIs containing true mean:", coverage, "\n")
+```
+
+```{r}
+# Plot all 100 CIs — colour those that missed the true mean
+missed <- results$lower > true_mean | results$upper < true_mean
+
+plot(1:n_exp, results$mean,
+     ylim = c(min(results$lower) - 1, max(results$upper) + 1),
+     pch  = NA,
+     xlab = "Experiment number",
+     ylab = "Estimated mean",
+     main = paste0("100 95% Confidence Intervals\n(", sum(!missed),
+                   " contain true mean, ", sum(missed), " miss)"))
+abline(h = true_mean, col = "black", lwd = 2)
+
+for (i in 1:n_exp) {
+  col_i <- if (missed[i]) "#C8102E" else "#2C5F8A60"
+  arrows(i, results$lower[i], i, results$upper[i],
+         angle = 90, code = 3, length = 0.02, col = col_i)
+}
+legend("topright",
+       legend = c("CI contains true mean", "CI misses true mean"),
+       col    = c("#2C5F8A60", "#C8102E"), lty = 1, lwd = 2, bty = "n")
+```
+
+------------------------------------------------------------------------
+
+## Part 2: Extracting CIs from `t.test()`
+
+```{r}
+set.seed(303)
+# Enzyme activity (units/mg protein) in HeLa cells: treated vs untreated
+untreated <- round(rnorm(22, mean = 48.5, sd = 7.2), 1)
+treated   <- round(rnorm(22, mean = 61.8, sd = 8.9), 1)
+
+# Two-sample t-test
+result <- t.test(treated, untreated, var.equal = FALSE)
+result
+```
+
+```{r}
+# Extract specific components
+cat("Mean difference:   ", round(diff(result$estimate), 2), "units/mg protein\n")
+cat("95% CI (difference):", round(result$conf.int[1], 2),
+    "to", round(result$conf.int[2], 2), "\n")
+cat("p-value:           ", formatC(result$p.value, format = "e", digits = 3), "\n")
+```
+
+::: callout-note
+## The CI for a Difference in Means
+
+When you run a two-sample t-test, the confidence interval reports the **plausible range for the true difference between the two group means** (group 1 minus group 2).
+
+- If the CI does **not** include 0: the difference is statistically significant at α = 0.05
+- If the CI **includes** 0: you cannot rule out no difference
+
+The CI for a difference is often more useful than the p-value because it tells you **how large** the difference could plausibly be — important for assessing biological relevance.
+:::
+
+------------------------------------------------------------------------
+
+## Part 3: Plotting Confidence Intervals
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Build a data frame
+enzyme_df <- data.frame(
+  activity  = c(untreated, treated),
+  treatment = rep(c("Untreated", "Treated"), each = 22)
+)
+
+# Compute summary statistics for CI error bars
+ci_df <- enzyme_df |>
+  group_by(treatment) |>
+  summarise(
+    mean   = mean(activity),
+    se     = sd(activity) / sqrt(n()),
+    ci_lo  = t.test(activity)$conf.int[1],
+    ci_hi  = t.test(activity)$conf.int[2],
+    .groups = "drop"
+  )
+
+# Plot means with 95% CI error bars
+ggplot(ci_df, aes(x = treatment, y = mean, colour = treatment)) +
+  geom_point(size = 4) +
+  geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi),
+                width = 0.15, linewidth = 1) +
+  geom_jitter(data = enzyme_df, aes(x = treatment, y = activity, colour = treatment),
+              width = 0.08, size = 1.8, alpha = 0.4) +
+  scale_colour_manual(values = c("Untreated" = "#2C5F8A",
+                                 "Treated"   = "#C8102E")) +
+  labs(title    = "HeLa Cell Enzyme Activity",
+       subtitle = "Points = individual observations; error bars = 95% CI of mean",
+       x        = "Treatment",
+       y        = "Enzyme Activity (units/mg protein)") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+### CI for a Paired Design
+
+```{r}
+set.seed(11)
+# Before/after: mitochondrial membrane potential (arbitrary units)
+# measured in 16 cells before and after a metabolic inhibitor
+before <- round(rnorm(16, mean = 95, sd = 10))
+after  <- round(before + rnorm(16, mean = -28, sd = 8))
+
+paired_result <- t.test(after, before, paired = TRUE)
+
+cat("Mean change (after - before):", round(paired_result$estimate, 2), "AU\n")
+cat("95% CI for change:           ", round(paired_result$conf.int[1], 2),
+    "to", round(paired_result$conf.int[2], 2), "\n")
+cat("p-value:                     ", formatC(paired_result$p.value, format = "e", digits = 2), "\n")
+```
+
+------------------------------------------------------------------------
+
+## Part 4: Testing for Equal Variances — Levene's Test
+
+The standard Student's t-test assumes **equal variances** (homoscedasticity) in the two groups. The safer alternative, Welch's t-test, relaxes this assumption. Before choosing, you can formally test whether variances are equal using **Levene's test**.
+
+::: callout-note
+## Levene's Test
+
+H₀: the variances of the two (or more) groups are equal
+H₁: at least one group has a different variance
+
+A significant Levene's test (p < 0.05) indicates unequal variances → use Welch's t-test (`var.equal = FALSE`).
+
+Levene's test uses the **absolute deviations from the group mean**, making it more robust to non-normality than Bartlett's test.
+:::
+
+```{r}
+# Install the car package if needed (contains leveneTest)
+# install.packages("car")
+library(car)
+
+# Levene's test on the enzyme activity data
+leveneTest(activity ~ treatment, data = enzyme_df)
+```
+
+```{r}
+# Examine the variances directly
+tapply(enzyme_df$activity, enzyme_df$treatment, var)
+```
+
+::: callout-tip
+## Which t-test to Use?
+
+| Condition | Test | Code |
+|-----------|------|------|
+| Levene's p ≥ 0.05 (equal variances) | Student's t-test | `var.equal = TRUE` |
+| Levene's p < 0.05 (unequal variances) | Welch's t-test | `var.equal = FALSE` |
+| Uncertain or default choice | Welch's t-test | `var.equal = FALSE` |
+
+Many statisticians now recommend always using Welch's t-test as the default because it performs nearly as well as Student's when variances are equal, but much better when they are not.
+:::
+
+### Example: Unequal Variances in Practice
+
+```{r}
+set.seed(99)
+# Cell proliferation (doublings per day) under two media conditions
+# Group A: consistent (low variance); Group B: variable (high variance)
+media_A <- round(rnorm(20, mean = 1.8, sd = 0.3), 2)
+media_B <- round(rnorm(20, mean = 1.8, sd = 1.2), 2)
+
+media_df <- data.frame(
+  doublings = c(media_A, media_B),
+  media     = rep(c("Media A", "Media B"), each = 20)
+)
+
+# Levene's test
+leveneTest(doublings ~ media, data = media_df)
+```
+
+```{r}
+# Compare Student's vs Welch's p-value (same data)
+t_student <- t.test(media_A, media_B, var.equal = TRUE)
+t_welch   <- t.test(media_A, media_B, var.equal = FALSE)
+
+cat("Student's t-test p-value:", round(t_student$p.value, 4), "\n")
+cat("Welch's t-test p-value:  ", round(t_welch$p.value, 4), "\n")
+cat("(Difference arises from unequal variance adjustment)\n")
+```
+
+------------------------------------------------------------------------
+
+## Part 5: Communicating Results — CI vs p-value
+
+```{r, echo=FALSE}
+cat("
+WHAT EACH TELLS YOU:
+
+p-value alone:     'The difference is statistically significant (p = 0.003).'
+                   (Says nothing about size or precision.)
+
+CI alone:          'The true mean increase is between 8.2 and 18.4 units.'
+                   (Gives size and precision, significance implied.)
+
+Both together:     't(38.2) = 3.21, p = 0.003; 95% CI for difference: 8.2 to 18.4 units.'
+                   (Complete picture: significant, and here is how big.)
+
+BEST PRACTICE:     Always report both. The CI lets readers judge whether
+                   the magnitude of the effect is biologically meaningful,
+                   regardless of the p-value.
+")
+```
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** A 95% CI for the difference in mean enzyme activity between two cell lines is (2.1, 14.8) units/mg. What can you conclude?
+
+    a) The difference is not significant because the CI is wide    b) The difference is significant because the CI does not include 0    c) There is a 95% probability the true difference is 2.1    d) The effect is biologically trivial
+
+**2.** Levene's test returns p = 0.03 for two groups you want to compare with a t-test. Which version should you use?
+
+    a) Student's t-test (`var.equal = TRUE`)    b) Welch's t-test (`var.equal = FALSE`)    c) A paired t-test    d) No t-test is valid
+
+**3.** A paired t-test gives a 95% CI for the mean difference of (−15.2, −4.8) blood glucose units. What does the fact that both bounds are negative tell you?
+
+**4.** Why are confidence intervals considered more informative than p-values alone in modern biology?
+
+**5.** True or False: If Levene's test is not significant (p = 0.4), you must use Student's t-test instead of Welch's.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) The difference is significant because the CI does not include 0 — A 95% CI that excludes 0 is equivalent to a significant two-sided t-test at α = 0.05. Here the entire interval is positive, meaning we are 95% confident the true difference is between 2.1 and 14.8 units/mg — a meaningful effect.
+
+**2.** b) Welch's t-test (`var.equal = FALSE`) — Levene's test p = 0.03 means we reject H₀ of equal variances (p < 0.05). Unequal variances violate the Student's t-test assumption. Welch's test adjusts the degrees of freedom to account for this and gives a more reliable p-value.
+
+**3.** Both bounds being negative means the mean difference (after − before, or treated − control) is negative with 95% confidence — i.e., the second time point or treatment consistently **reduced** blood glucose. The entire CI lies below zero, confirming the decrease is statistically significant and that the direction of the effect is certain.
+
+**4.** A p-value tells you only whether an effect is large enough to be detected (given your sample size). A confidence interval tells you the **magnitude** and **precision** of the effect. A drug that lowers blood pressure by 0.5 mmHg (95% CI: 0.1, 0.9) might have p < 0.001 with a large n — but the CI reveals the effect is clinically trivial. Conversely, a wide CI (−5, 30 mmHg) with p = 0.15 might indicate a promising but underpowered study.
+
+**5.** **False** — Even when Levene's test is not significant, you may still choose Welch's t-test, which performs nearly identically to Student's when variances are equal but is more robust when they are not. Many statisticians recommend defaulting to Welch's in all cases. There is no penalty for using Welch's when variances happen to be equal.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 18 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Explain what a 95% CI means (and what it does not mean)
+- [ ] Extract the CI from `t.test()` output using `$conf.int`
+- [ ] Plot means with 95% CI error bars using `geom_errorbar()` in ggplot2
+- [ ] Interpret a CI for a difference: does it include 0? Is the effect large?
+- [ ] Install and load the `car` package and run `leveneTest()`
+- [ ] Interpret Levene's test result and choose between Student's and Welch's t-test accordingly
+- [ ] Report results including both p-value and CI: "t(df) = value, p = value; 95% CI: lower to upper"
+
+::: callout-tip
+## Bonus Challenge
+
+Take the blood glucose dataset from Part 3. For each of the 16 patients, compute the individual change (after − before). Plot these changes as a strip chart with a horizontal reference line at 0 (no change). Add a point for the mean change with its 95% CI. Write a one-paragraph clinical interpretation of whether the metabolic inhibitor significantly and meaningfully altered mitochondrial membrane potential.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Friday)
+
+- Friday (Lab 19): ANOVA for comparing three or more groups, and Tukey-Kramer post-hoc tests
+- Friday is a **teaching day** (not a quiz day this week)
+- Read the first part of **R for Data Science Ch. 9–10** if not already done
+
+------------------------------------------------------------------------

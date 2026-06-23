@@ -1,0 +1,443 @@
+---
+title: "Lab 10: Frequency Data, Confidence Intervals for Proportions & the Poisson Distribution"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "September 14, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Counting and Categorising: Frequency Data in Biology
+
+Much of the data collected in biology is not a measurement on a continuous scale but a **count** or a **category**. How many patients responded to a treatment? What proportion of offspring show a recessive phenotype? How many mutations occur per genome replication? These are all questions about **frequency data**.
+
+In this lab we cover three connected ideas: summarising categorical data with frequency tables, estimating proportions with confidence intervals, and modelling rare biological events with the Poisson distribution.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Create frequency tables with `table()` and `prop.table()`
+2. Visualise frequency data with bar charts
+3. Compute a confidence interval for a proportion using `prop.test()`
+4. Explain what the Poisson distribution models
+5. Use `dpois()`, `ppois()`, and `rpois()` to work with Poisson probabilities
+6. Recognise which biological questions call for Poisson modelling
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Frequency Tables — ABO Blood Types
+
+The ABO blood group system is determined by alleles at a single locus and follows predictable population frequencies. In the United States the approximate frequencies are: O = 44%, A = 42%, B = 10%, AB = 4%.
+
+Suppose you blood-type 200 students at a university health clinic:
+
+```{r}
+# Simulated blood type data from 200 students
+set.seed(42)
+blood_types <- sample(
+  x       = c("O", "A", "B", "AB"),
+  size    = 200,
+  replace = TRUE,
+  prob    = c(0.44, 0.42, 0.10, 0.04)
+)
+
+# First six observations
+head(blood_types, 20)
+```
+
+### Counts with `table()`
+
+```{r}
+# Count how many students fall into each blood type
+bt_counts <- table(blood_types)
+bt_counts
+```
+
+```{r}
+# Sort from most to least common
+sort(bt_counts, decreasing = TRUE)
+```
+
+### Proportions with `prop.table()`
+
+```{r}
+# Convert counts to proportions (values between 0 and 1)
+bt_props <- prop.table(bt_counts)
+round(bt_props, 3)
+```
+
+```{r}
+# Convert to percentages
+round(bt_props * 100, 1)
+```
+
+::: callout-tip
+## `table()` vs `prop.table()`
+
+`table()` gives you **raw counts** — how many of each category.
+
+`prop.table()` takes a table and converts counts to **proportions** that sum to 1.
+
+Use `prop.table(table(x))` when you want to compare across groups of different sizes.
+:::
+
+### Visualising with a Bar Chart
+
+```{r}
+# Order by frequency for a cleaner plot
+bt_ordered <- sort(bt_counts, decreasing = TRUE)
+
+barplot(bt_ordered,
+        col    = c("#2C5F8A", "#5B8DB8", "#A8C4D9", "#D6E8F5"),
+        ylab   = "Number of Students",
+        xlab   = "Blood Type",
+        main   = "ABO Blood Type Distribution\n200 University Students (Simulated)",
+        ylim   = c(0, 120))
+
+# Add reference line at expected US frequency
+abline(h = 200 * 0.44, col = "red", lty = 2)
+text(4.5, 200 * 0.44 + 3, "Expected O frequency", col = "red", cex = 0.8)
+```
+
+------------------------------------------------------------------------
+
+## Part 2: Two-Way Frequency Tables
+
+We can cross-tabulate two categorical variables at once. Suppose we also recorded whether each student is Rh-positive or Rh-negative (approximately 85% of people are Rh+):
+
+```{r}
+set.seed(7)
+rh_factor <- sample(c("Rh+", "Rh-"), size = 200, replace = TRUE, prob = c(0.85, 0.15))
+
+# Two-way table: blood type by Rh factor
+two_way <- table(blood_types, rh_factor)
+two_way
+```
+
+```{r}
+# Row proportions: within each blood type, what fraction is Rh+?
+round(prop.table(two_way, margin = 1), 3)
+```
+
+::: callout-note
+## `margin` in `prop.table()`
+
+- `margin = 1` → proportions calculated **within each row** (row sums to 1)
+- `margin = 2` → proportions calculated **within each column** (column sums to 1)
+- No `margin` argument → all cells sum to 1 (overall proportions)
+:::
+
+```{r}
+# Visualise as a grouped bar chart
+barplot(t(two_way),
+        beside  = TRUE,
+        col     = c("#2C5F8A", "#C8102E"),
+        legend  = rownames(t(two_way)),
+        xlab    = "Blood Type",
+        ylab    = "Count",
+        main    = "ABO Blood Type by Rh Factor")
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Confidence Intervals for Proportions
+
+A frequency or proportion from a sample is just an **estimate** of the true population proportion. We need a confidence interval to express our uncertainty.
+
+### The `prop.test()` Function
+
+Suppose in our sample, 88 out of 200 students have blood type A. We want to estimate the true proportion of type-A individuals in the population with a 95% confidence interval.
+
+```{r}
+# 88 successes (type A) out of 200 students
+result <- prop.test(x = 88, n = 200, conf.level = 0.95)
+result
+```
+
+```{r}
+# Extract just the confidence interval
+result$conf.int
+```
+
+```{r}
+# Extract the point estimate (sample proportion)
+result$estimate
+```
+
+::: callout-note
+## Reading `prop.test()` Output
+
+| Output element | Meaning |
+|----------------|---------|
+| `X-squared` | Chi-square statistic |
+| `p-value` | Tests H₀: p = 0.5 by default |
+| `95 percent confidence interval` | The range the true proportion likely falls in |
+| `sample estimates: p` | Your observed proportion |
+
+The confidence interval is what you usually want. For a two-sided 95% CI, you can be 95% confident the true proportion lies within those bounds.
+:::
+
+### Testing Against a Known Proportion
+
+The US population frequency of blood type A is 0.42. Is our sample consistent with this?
+
+```{r}
+# H₀: true proportion of type A = 0.42
+# H₁: true proportion ≠ 0.42
+prop.test(x = 88, n = 200, p = 0.42, conf.level = 0.95)
+```
+
+```{r}
+# Visualise: observed proportion with CI
+obs_prop <- 88 / 200
+ci       <- prop.test(88, 200)$conf.int
+
+plot(x    = 1,
+     y    = obs_prop,
+     xlim = c(0.5, 1.5),
+     ylim = c(0.30, 0.60),
+     pch  = 16, cex = 1.5,
+     col  = "#2C5F8A",
+     xaxt = "n",
+     xlab = "",
+     ylab = "Proportion",
+     main = "Observed Proportion of Blood Type A\nwith 95% Confidence Interval")
+arrows(1, ci[1], 1, ci[2], angle = 90, code = 3, length = 0.1, col = "#2C5F8A", lwd = 2)
+abline(h = 0.42, col = "red", lty = 2)
+text(1.2, 0.42, "US expected (0.42)", col = "red", cex = 0.8)
+```
+
+------------------------------------------------------------------------
+
+## Part 4: The Poisson Distribution — Modelling Rare Biological Events
+
+The **Poisson distribution** describes the probability of a given number of events occurring in a fixed interval of time or space, when those events happen at a known average rate and are independent of each other.
+
+In biology, it models:
+
+- The number of mutations per genome replication
+- The number of ion channel openings per second
+- The number of cells in a haemocytometer grid square
+- The number of rare disease cases per 100,000 people per year
+
+::: callout-important
+## The Key Parameter: Lambda (λ)
+
+The Poisson distribution has a single parameter, **λ** (lambda) = the mean number of events per interval.
+
+If λ = 2 mutations per genome replication, then the Poisson distribution tells you the probability of seeing 0, 1, 2, 3... mutations in any given replication event.
+
+Crucially: **the mean equals the variance** in a Poisson distribution. This is a useful diagnostic check — if your data's variance is much larger than its mean, the Poisson may not be the right model.
+:::
+
+### Poisson Probability Functions
+
+```{r}
+# Suppose the spontaneous mutation rate is 2 mutations per genome replication (lambda = 2)
+lambda <- 2
+
+# P(exactly 0 mutations)
+dpois(0, lambda = lambda)
+```
+
+```{r}
+# P(exactly 3 mutations)
+dpois(3, lambda = lambda)
+```
+
+```{r}
+# Full probability distribution: P(0 through 10 mutations)
+k        <- 0:10
+probs    <- dpois(k, lambda = lambda)
+names(probs) <- k
+round(probs, 4)
+```
+
+```{r}
+# Visualise the distribution
+barplot(probs,
+        names.arg = k,
+        col       = "#2C5F8A",
+        xlab      = "Number of Mutations per Replication",
+        ylab      = "Probability",
+        main      = paste0("Poisson Distribution (lambda = ", lambda, ")\nMutation Rate Model"))
+```
+
+### Cumulative Probabilities with `ppois()`
+
+```{r}
+# P(3 or fewer mutations) — cumulative
+ppois(3, lambda = lambda)
+```
+
+```{r}
+# P(more than 5 mutations) — upper tail
+ppois(5, lambda = lambda, lower.tail = FALSE)
+```
+
+::: callout-tip
+## `dpois()` vs `ppois()`
+
+- `dpois(k, lambda)` — probability of **exactly** k events
+- `ppois(k, lambda)` — probability of **k or fewer** events (cumulative)
+- `ppois(k, lambda, lower.tail = FALSE)` — probability of **more than** k events
+
+The same logic applies to `dnorm`/`pnorm` and other distribution functions in R.
+:::
+
+### Simulating Poisson Data
+
+```{r}
+# Simulate 1000 genome replications, each with lambda = 2 mutations
+set.seed(123)
+simulated_mutations <- rpois(1000, lambda = 2)
+
+cat("Mean mutations per replication:    ", round(mean(simulated_mutations), 3), "\n")
+cat("Variance of mutations:             ", round(var(simulated_mutations), 3), "\n")
+cat("(For Poisson, mean ≈ variance)\n")
+```
+
+```{r}
+# Compare simulated data to theoretical Poisson
+obs_freq   <- table(simulated_mutations) / 1000
+theory_prob <- dpois(as.numeric(names(obs_freq)), lambda = 2)
+
+barplot(rbind(obs_freq, theory_prob),
+        beside    = TRUE,
+        col       = c("#2C5F8A", "#C8102E"),
+        legend    = c("Simulated", "Theoretical Poisson"),
+        xlab      = "Number of Mutations",
+        ylab      = "Proportion",
+        main      = "Simulated vs Theoretical Poisson(lambda=2)")
+```
+
+### Real Application: Rare Disease Incidence
+
+A disease occurs at a rate of 3.5 cases per 100,000 people per year. A city of 500,000 people is monitored. On average, how many cases do we expect per year, and what is the probability of seeing 25 or more cases?
+
+```{r}
+# Expected cases in a city of 500,000
+lambda_city <- 3.5 * (500000 / 100000)
+cat("Expected cases per year:", lambda_city, "\n")
+```
+
+```{r}
+# Probability of 25 or more cases
+p_25_plus <- ppois(24, lambda = lambda_city, lower.tail = FALSE)
+cat("P(25 or more cases):", round(p_25_plus, 4), "\n")
+```
+
+```{r}
+# Plot the distribution across plausible outcomes
+k_range <- 0:35
+plot(k_range, dpois(k_range, lambda = lambda_city),
+     type = "h",
+     lwd  = 3,
+     col  = ifelse(k_range >= 25, "#C8102E", "#2C5F8A"),
+     xlab = "Number of Cases per Year",
+     ylab = "Probability",
+     main = "Poisson Distribution: Rare Disease Cases\nCity of 500,000 (lambda = 17.5)")
+legend("topright",
+       legend = c("Expected range", "25+ cases (unusual)"),
+       col    = c("#2C5F8A", "#C8102E"),
+       lty    = 1, lwd = 3)
+```
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** You survey 150 patients and find 45 have hypertension. What R function would you use to calculate a 95% confidence interval for the proportion of hypertensive patients?
+
+    a) `t.test(45, 150)`    b) `prop.test(45, 150)`    c) `table(45, 150)`    d) `pnorm(45, 150)`
+
+**2.** `prop.table(table(x), margin = 1)` calculates proportions:
+
+    a) Across all cells (total = 1)    b) Within each row    c) Within each column    d) Divided by the number of columns
+
+**3.** A Poisson distribution with lambda = 4 models an event that happens on average 4 times per interval. What is the relationship between the mean and variance of this distribution?
+
+**4.** Write the R code to calculate the probability of observing **exactly 2** events from a Poisson distribution with lambda = 5.
+
+**5.** True or False: The Poisson distribution is appropriate for modelling continuous measurements like protein concentration.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) `prop.test(45, 150)` — This is the correct function for a confidence interval on a proportion. `x` = number of successes, `n` = total observations.
+
+**2.** b) Within each row — `margin = 1` calculates proportions so that each **row** sums to 1. Use this to compare groups when rows represent different categories.
+
+**3.** They are **equal** — in the Poisson distribution, the mean (λ) equals the variance. This is a defining property of the Poisson. If your data shows variance much larger than the mean, a negative binomial distribution may be more appropriate.
+
+**4.** `dpois(2, lambda = 5)` — `dpois` gives the probability of exactly `k` events; here k = 2, lambda = 5.
+
+**5.** **False** — The Poisson distribution models **count data** (discrete, non-negative integers): number of mutations, number of events per unit time, number of organisms in a quadrat. Continuous measurements like concentration are modelled with the normal distribution or others.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 10 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Create a frequency table with `table()` and convert to proportions with `prop.table()`
+- [ ] Build a two-way contingency table and calculate row or column proportions
+- [ ] Use `prop.test()` to calculate a 95% confidence interval for a proportion
+- [ ] Test whether an observed proportion is consistent with a known expected value
+- [ ] Explain what lambda represents in a Poisson distribution
+- [ ] Use `dpois()` for exact probabilities and `ppois()` for cumulative probabilities
+- [ ] Simulate Poisson data with `rpois()` and compare to theoretical expectations
+
+::: callout-tip
+## Bonus Challenge
+
+The spontaneous mutation rate of *E. coli* is approximately 1 × 10⁻³ mutations per genome replication. If we observe 50,000 replication events, what lambda would we use? Calculate P(0 mutations), P(exactly 50 mutations), and P(more than 100 mutations). Plot the distribution.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Wednesday)
+
+- Wednesday (Lab 11): Hypothesis Testing and the Null Hypothesis — we go deeper on p-values, Type I/II errors, and effect sizes
+- Read **Wilke 2021 Ch. 1, 2** (link on Canvas)
+
+::: callout-important
+## Quiz 3 — This Friday!
+
+Quiz 3 covers **Labs 10 and 11**: frequency tables, proportions, CI for proportions, hypothesis testing, and the Poisson distribution.
+
+Best preparation: be able to explain what a p-value means in plain English and know when to use `prop.test()` vs `t.test()`.
+:::
+
+------------------------------------------------------------------------

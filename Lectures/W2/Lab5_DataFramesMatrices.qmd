@@ -1,0 +1,587 @@
+---
+title: "Lab 5: Data Frames and Matrices"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "August 28, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## From Vectors to Tables: NBA Roster Data
+
+So far we've worked with individual vectors — one column of data at a time. Real biological and sports data comes in **tables**: multiple columns with different types of information about the same subjects.
+
+Today we learn **data frames** (R's version of a spreadsheet) and **matrices** (tables of numbers only).
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Create a data frame using `data.frame()`
+2. Explore a data frame with `str()`, `head()`, `tail()`, `dim()`, `nrow()`, `ncol()`
+3. Access columns with `$` and `[ ]`
+4. Create a matrix using `matrix()`
+5. Understand the key difference between data frames and matrices
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: What Is a Data Frame?
+
+A **data frame** is a table where:
+- Each **row** is one observation (e.g., one player)
+- Each **column** is one variable (e.g., points, rebounds, position)
+- Each column can have a **different data type** (numbers AND text can live together)
+
+This is exactly like a spreadsheet, and it's the most important data structure in R for biological data.
+
+```{r}
+# Let's build a data frame for the 2025-26 Golden State Warriors roster
+warriors <- data.frame(
+  player     = c("Stephen Curry", "Klay Thompson", "Draymond Green",
+                 "Andrew Wiggins", "Kevon Looney", "Jonathan Kuminga",
+                 "Moses Moody", "Brandin Podziemski", "Gary Payton II",
+                 "Chris Paul"),
+  jersey_num = c(30, 11, 23, 22, 5, 00, 4, 2, 8, 3),
+  position   = c("PG", "SG", "PF", "SF", "C", "SF", "SG", "PG", "SG", "PG"),
+  age        = c(37, 34, 34, 29, 28, 22, 22, 21, 32, 40),
+  ppg        = c(26.4, 17.9, 8.5, 14.2, 6.3, 16.1, 9.4, 12.8, 7.1, 9.0),
+  is_allstar = c(TRUE, TRUE, TRUE, FALSE, FALSE, FALSE,
+                 FALSE, FALSE, FALSE, TRUE)
+)
+```
+
+------------------------------------------------------------------------
+
+## Part 2: Exploring a Data Frame
+
+Once you have a data frame, these functions help you understand its contents immediately:
+
+```{r}
+# How big is it? (rows, columns)
+dim(warriors)
+```
+
+```{r}
+nrow(warriors)   # Number of rows (players)
+ncol(warriors)   # Number of columns (variables)
+```
+
+```{r}
+# Show the first 6 rows
+head(warriors)
+```
+
+```{r}
+# Show the last 6 rows
+tail(warriors)
+```
+
+```{r}
+# The most important function: str() shows the STRucture
+str(warriors)
+```
+
+::: callout-tip
+## `str()` Is Your Best Friend
+Always run `str()` on a new dataset. It tells you:
+- How many rows and columns there are
+- The name and type of every column
+- A preview of the first few values
+
+In biology, the first thing you do with any new dataset is `str()` then `head()`.
+:::
+
+```{r}
+# summary() gives quick statistics for every column
+summary(warriors)
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Accessing Columns with `$`
+
+The `$` operator lets you pull out a single column as a vector:
+
+```{r}
+# Get the player names
+warriors$player
+```
+
+```{r}
+# Get their points per game
+warriors$ppg
+```
+
+```{r}
+# Calculate team statistics
+cat("Team average PPG:", round(mean(warriors$ppg), 1), "\n")
+cat("Highest scorer:  ", warriors$player[which.max(warriors$ppg)], "\n")
+cat("Average age:     ", round(mean(warriors$age), 1), "years\n")
+```
+
+::: callout-note
+## `which.max()` and `which.min()`
+These functions return the **position** of the largest or smallest value in a vector — very useful for finding who scored the most, which game had the fewest points, etc.
+
+```{r}
+which.max(warriors$ppg)    # Position 1 = Curry (highest PPG)
+which.min(warriors$age)    # Position 8 = Podziemski (youngest)
+```
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: Accessing Rows and Cells with `[ , ]`
+
+For a data frame, you can select specific rows and/or columns using `[row, column]`:
+
+```{r}
+# First row (first player)
+warriors[1, ]
+```
+
+```{r}
+# First column (all players' names)
+warriors[, 1]
+```
+
+```{r}
+# Row 1, Column 5 (Curry's PPG)
+warriors[1, 5]
+```
+
+```{r}
+# Multiple rows
+warriors[1:3, ]
+```
+
+```{r}
+# Specific columns by name
+warriors[, c("player", "ppg")]
+```
+
+::: callout-tip
+## The Golden Rule of `[row, column]`
+In R, brackets for 2D objects always go **[row, column]**.
+
+- `warriors[2, ]` → second row, all columns
+- `warriors[, 3]` → all rows, third column
+- `warriors[2, 3]` → specific cell: row 2, column 3
+
+Leave a position blank to mean "all of them."
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: Adding Columns
+
+You can add new columns to an existing data frame using `$`:
+
+```{r}
+# Add a fantasy basketball value column
+# (PPG * 1.5 + bonus 5 if All-Star)
+warriors$fantasy_value <- warriors$ppg * 1.5 + ifelse(warriors$is_allstar, 5, 0)
+warriors[, c("player", "ppg", "is_allstar", "fantasy_value")]
+```
+
+```{r}
+# Add a "veteran" column (TRUE if age >= 30)
+warriors$veteran <- warriors$age >= 30
+warriors[, c("player", "age", "veteran")]
+```
+
+------------------------------------------------------------------------
+
+## Part 6: Matrices
+
+A **matrix** is like a data frame but with one important restriction: **all values must be the same type** (usually all numbers).
+
+Matrices are useful for mathematical operations in biology — like comparing gene expression across samples, or a season-by-season stats table.
+
+```{r}
+# Create a matrix of playoff statistics for 4 Warriors players
+# Rows = Players, Columns = Stats (Points, Assists, Rebounds per game)
+playoff_stats <- matrix(
+  c(29.5, 6.2, 5.1,    # Curry
+    18.3, 3.1, 4.8,    # Klay
+     9.1, 7.4, 8.9,    # Draymond
+    15.7, 4.0, 5.2),   # Wiggins
+  nrow    = 4,
+  ncol    = 3,
+  byrow   = TRUE        # Fill row by row
+)
+
+# Add row and column names
+rownames(playoff_stats) <- c("Curry", "Klay", "Draymond", "Wiggins")
+colnames(playoff_stats) <- c("PPG", "APG", "RPG")
+
+playoff_stats
+```
+
+```{r}
+# Matrix math: calculate team totals for each stat
+colSums(playoff_stats)
+```
+
+```{r}
+# Row means (average stat per player across all categories)
+rowMeans(playoff_stats)
+```
+
+```{r}
+# Access like a data frame: [row, column]
+playoff_stats["Curry", "PPG"]   # Curry's playoff PPG
+playoff_stats[, "RPG"]          # All players' rebounds
+```
+
+::: callout-note
+## Data Frame vs Matrix — When to Use Which?
+
+| Feature | Data Frame | Matrix |
+|---------|-----------|--------|
+| Column types | Can be mixed (text + numbers) | All must be the same type |
+| Best for | Real datasets with names, categories, numbers | Pure numerical calculations |
+| Access columns | `$column_name` | `[row, col]` |
+| Math functions | `sum()`, `mean()` per column | `colSums()`, `rowMeans()` etc. |
+
+**In biology**: Most of your data will be data frames. You'll use matrices mainly for statistics and gene expression analysis.
+:::
+
+------------------------------------------------------------------------
+
+## Part 7: A Quick Visualization
+
+```{r}
+# Bar chart of Warriors players' PPG
+barplot(
+  warriors$ppg,
+  names.arg = warriors$player,
+  col       = "#1D428A",
+  las       = 2,           # Rotate x-axis labels vertically
+  cex.names = 0.7,         # Smaller font for labels
+  ylab      = "Points Per Game",
+  main      = "Golden State Warriors\n2025–26 Points Per Game",
+  ylim      = c(0, 35)
+)
+abline(h = mean(warriors$ppg), col = "#FFC72C", lty = 2, lwd = 2)
+```
+
+------------------------------------------------------------------------
+
+## Part 8: Importing and Exporting CSV Files — Amino Acid Properties
+
+Almost all real-world biological data arrives as a **CSV file** (Comma-Separated Values) — a plain text file where each row is one observation and columns are separated by commas. This is the universal format for sharing data between spreadsheets, databases, and R.
+
+In this section we will work with a real biochemistry dataset compiled from standard reference values for the 20 canonical amino acids. The physicochemical properties we will use — molecular weight, isoelectric point, and hydrophobicity — are foundational to understanding protein structure and function and appear in virtually every biochemistry and structural biology paper.
+
+::: callout-note
+## About This Dataset
+
+The file `amino_acid_properties.csv` contains properties for all 20 standard amino acids. Key columns include:
+
+| Column | Description |
+|--------|-------------|
+| `amino_acid` | Full name |
+| `abbrev_3` | Three-letter code (e.g., Ala) |
+| `abbrev_1` | Single-letter code (e.g., A) |
+| `classification` | Chemical class (nonpolar, polar, charged, aromatic) |
+| `molecular_weight_gmol` | Molecular weight in g/mol |
+| `isoelectric_point` | pH at which net charge = 0 (pI) |
+| `hydrophobicity_kd` | Kyte-Doolittle hydrophobicity index |
+| `num_codons` | Number of codons encoding this amino acid |
+| `essential` | Whether it is an essential amino acid (TRUE/FALSE) |
+
+Hydrophobicity values are from: Kyte J & Doolittle RF (1982) *A simple method for displaying the hydropathic character of a protein.* J Mol Biol 157:105–132. Isoelectric points and molecular weights are from Lehninger's *Principles of Biochemistry* (8th ed.).
+:::
+
+### Step 1: Upload the CSV to Posit Cloud
+
+Your instructor will provide the file `amino_acid_properties.csv` via Canvas. Download it to your computer, then upload it to your Posit Cloud project:
+
+::: callout-important
+## Uploading Files to Posit Cloud
+
+1. In your Posit Cloud project, look at the **Files** panel (bottom right)
+2. Click the **Upload** button (upward arrow icon)
+3. Click **Choose File**, select `amino_acid_properties.csv` from your computer
+4. Click **OK**
+
+The file will appear in your project's file list and R can now read it.
+:::
+
+### Step 2: Read the CSV into R
+
+```{r}
+# Read the amino acid properties CSV into a data frame
+aa <- read.csv("amino_acid_properties.csv")
+```
+
+::: callout-note
+## Common `read.csv()` Arguments
+
+| Argument | What it does | Default |
+|----------|-------------|---------|
+| `file` | File name or path | (required) |
+| `header` | Is the first row column names? | `TRUE` |
+| `na.strings` | Text to treat as missing | `"NA"` |
+| `stringsAsFactors` | Convert text columns to factors? | `FALSE` |
+
+For most clean CSV files, `read.csv("filename.csv")` with no extra arguments works perfectly.
+:::
+
+::: callout-tip
+## Reading a CSV Directly from a URL
+
+If your instructor shares a data file via a web link, you can skip the upload step entirely:
+
+```r
+url <- "https://example.com/data/amino_acid_properties.csv"
+aa  <- read.csv(url)
+```
+
+This downloads and reads the file in one step. We will use this approach regularly in later labs.
+:::
+
+### Step 3: Inspect the Imported Data
+
+After importing any dataset, always run these three checks before doing anything else:
+
+```{r}
+# How many rows and columns?
+dim(aa)
+```
+
+```{r}
+# What are the column names and data types?
+str(aa)
+```
+
+```{r}
+# What do the first few rows look like?
+head(aa)
+```
+
+::: callout-warning
+## Three Checks After Every Import
+
+1. **`dim()`** — Do you have the right number of rows and columns? (Should be 20 rows, 9 columns)
+2. **`str()`** — Are the column types correct? Molecular weight should be `num`, not `chr`
+3. **`head()`** — Does the data look right, or did the header row accidentally become row 1?
+
+These checks take 10 seconds and will save you from a lot of downstream confusion.
+:::
+
+### Step 4: Explore the Biochemistry
+
+Now that the data is loaded, let's use what we learned earlier in this lab to explore it:
+
+```{r}
+# Quick statistical summary of all numeric columns
+summary(aa)
+```
+
+```{r}
+# Which amino acid has the highest molecular weight?
+aa$amino_acid[which.max(aa$molecular_weight_gmol)]
+```
+
+```{r}
+# Which is most hydrophobic (highest Kyte-Doolittle score)?
+aa$amino_acid[which.max(aa$hydrophobicity_kd)]
+```
+
+```{r}
+# Which is most hydrophilic (lowest score)?
+aa$amino_acid[which.min(aa$hydrophobicity_kd)]
+```
+
+```{r}
+# How many essential vs non-essential amino acids?
+table(aa$essential)
+```
+
+```{r}
+# Average molecular weight by chemical classification
+tapply(aa$molecular_weight_gmol, aa$classification, mean)
+```
+
+```{r}
+# Visualize: molecular weight vs isoelectric point
+plot(aa$molecular_weight_gmol, aa$isoelectric_point,
+     xlab = "Molecular Weight (g/mol)",
+     ylab = "Isoelectric Point (pI)",
+     main = "Amino Acid Properties\nMolecular Weight vs. Isoelectric Point",
+     pch  = 16,
+     col  = ifelse(aa$essential, "#C8102E", "#1D428A"))
+text(aa$molecular_weight_gmol, aa$isoelectric_point,
+     labels = aa$abbrev_1,
+     pos    = 3,
+     cex    = 0.7)
+legend("topright",
+       legend = c("Essential", "Non-essential"),
+       col    = c("#C8102E", "#1D428A"),
+       pch    = 16)
+```
+
+::: callout-note
+## What Is the Isoelectric Point?
+
+The **isoelectric point (pI)** is the pH at which an amino acid carries no net electrical charge. At pH values below the pI, the molecule is positively charged; above the pI, it is negatively charged.
+
+Notice in the plot that the positively charged amino acids (Arg, Lys, His) cluster at high pI values (above 7), while negatively charged ones (Asp, Glu) have very low pI values. This property is exploited in techniques like gel electrophoresis and ion-exchange chromatography.
+:::
+
+### Step 5: Write a Filtered Dataset to CSV
+
+Suppose you want to save just the essential amino acids to a separate file to share with a colleague:
+
+```{r}
+# Subset: essential amino acids only
+essential_aa <- aa[aa$essential == TRUE, ]
+
+cat("Number of essential amino acids:", nrow(essential_aa), "\n")
+
+# Write to a new CSV
+write.csv(essential_aa,
+          file      = "essential_amino_acids.csv",
+          row.names = FALSE)   # ALWAYS use row.names = FALSE
+
+cat("File saved. Check your Files panel.\n")
+```
+
+::: callout-important
+## Always Use `row.names = FALSE`
+
+By default, `write.csv()` prepends a column of row numbers (1, 2, 3...) to your file. This is almost never useful and creates problems when you re-import the file. Always include `row.names = FALSE`.
+:::
+
+```{r}
+# Read it back to confirm it saved correctly
+check <- read.csv("essential_amino_acids.csv")
+dim(check)
+head(check)
+```
+
+### Step 6: Download the CSV from Posit Cloud
+
+After saving a file in R, retrieve it from Posit Cloud to your own computer:
+
+::: callout-note
+## Downloading Files from Posit Cloud
+
+1. In the **Files** panel (bottom right), check the box next to `essential_amino_acids.csv`
+2. Click **More** (the gear icon at the top of the Files panel)
+3. Select **Export**
+4. Click **Download**
+
+The file will download to your Downloads folder and can be opened in Excel or shared with collaborators.
+:::
+
+::: callout-tip
+## The Full Data Science File Workflow
+
+In nearly every lab going forward, the workflow will be:
+
+1. **Import** — `read.csv("file.csv")` to load your data
+2. **Explore** — `str()`, `head()`, `summary()` to understand it
+3. **Analyze** — filter, calculate, summarize
+4. **Export** — `write.csv(df, "results.csv", row.names = FALSE)` to save your results
+5. **Download** — use the Files panel to get the CSV onto your computer
+
+Mastering this cycle means you can take data from any published source, process it in R, and share your results in a format any software can open.
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** You have a data frame called `roster`. Which function gives you a quick overview of column names, types, and sample values?
+
+    a) `summary(roster)`  &nbsp;&nbsp; b) `str(roster)`  &nbsp;&nbsp; c) `head(roster)`  &nbsp;&nbsp; d) `dim(roster)`
+
+**2.** How do you access the `ppg` column of a data frame called `warriors`?
+
+**3.** In `df[3, ]`, what does leaving the column position blank mean?
+
+    a) Select no columns  &nbsp;&nbsp; b) Select all columns  &nbsp;&nbsp; c) Select the third column  &nbsp;&nbsp; d) It causes an error
+
+**4.** What is the key difference between a **data frame** and a **matrix** in R?
+
+**5.** True or False: A data frame can have a column of text AND a column of numbers.
+
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) `str(roster)` — `str()` shows the **structure**: number of rows/columns, column names, data types, and sample values. This is the single most useful first-look function in R.
+
+**2.** `warriors$ppg` — The `$` operator accesses a named column as a vector. You can also use `warriors[, "ppg"]` or `warriors[, 5]` if PPG is the 5th column.
+
+**3.** b) Select all columns — In `[row, column]` notation, leaving a position blank means "give me everything." So `df[3, ]` means row 3, all columns.
+
+**4.** A **data frame** can hold **mixed types** (numbers, text, logical values in different columns). A **matrix** can only hold **one type** — usually all numbers. Most real data belongs in a data frame.
+
+**5.** **True** — This is one of the most important features of data frames. You can have a `player` column (character) and a `ppg` column (numeric) in the same data frame.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 5 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Create a data frame using `data.frame()`
+- [ ] Use `str()`, `head()`, `tail()`, `dim()`, `nrow()`, `ncol()`, `summary()`
+- [ ] Access a column using `$`
+- [ ] Access rows, columns, and cells using `[row, column]`
+- [ ] Add a new column to an existing data frame
+- [ ] Create a matrix using `matrix()` and set row/column names
+- [ ] Explain the key difference between a data frame and a matrix
+- [ ] Upload `amino_acid_properties.csv` to Posit Cloud using the Files panel
+- [ ] Read a CSV into R with `read.csv("filename.csv")`
+- [ ] Run `dim()`, `str()`, and `head()` immediately after import to verify the data
+- [ ] Subset a data frame by a logical condition and write the result to a new CSV with `write.csv(df, "filename.csv", row.names = FALSE)`
+- [ ] Download a CSV from Posit Cloud to your computer using the Files panel Export option
+
+::: callout-tip
+## Bonus Challenge
+Build a data frame for any sports team of your choice with at least 5 players and 4 variables (at least one should be text, one numeric, one logical). Use `str()` and `summary()` to explore it. Calculate the team average for at least one numeric variable. Add it to your Quarto document!
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Monday, Week 3)
+
+- Read **Intro2r Ch. 3 §3.2–3.3**
+- Monday (Lab 6) we learn **subsetting** — how to filter and select specific parts of your data
+- Practice: try adding two more columns to the `warriors` data frame above
+
+------------------------------------------------------------------------

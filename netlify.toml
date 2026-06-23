@@ -1,0 +1,10 @@
+# Netlify configuration for the BI 255 Quarto website
+[build]
+  command = "quarto render"
+  publish = "_site"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"

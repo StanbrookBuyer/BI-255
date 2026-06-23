@@ -1,0 +1,322 @@
+---
+title: "Lab 23: Contingency Tests — Goodness of Fit & Independence"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "October 21, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Testing Counts Against Expected Frequencies
+
+All the tests covered so far have dealt with continuous measurements. But biological data are often **categorical counts**: how many offspring showed a given phenotype, how many patients fell into each disease category, how many sequences matched a particular motif.
+
+The **chi-square test** is the workhorse for categorical count data. It comes in two forms:
+
+1. **Goodness of fit** — does the observed distribution match a specific expected distribution?
+2. **Test of independence** — are two categorical variables associated with each other?
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Identify when chi-square (rather than a t-test) is the appropriate test
+2. Run a chi-square goodness of fit test with `chisq.test()` against expected Mendelian ratios
+3. Run a chi-square test of independence on a two-way contingency table
+4. Interpret chi-square test output: X², df, and p-value
+5. Check expected cell frequency assumptions and switch to Fisher's exact test when needed
+6. Visualise contingency table data with bar plots and mosaic plots
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Chi-Square Goodness of Fit — Mendelian Ratios
+
+Gregor Mendel predicted that crossing two heterozygous plants (Aa × Aa) produces offspring in a 3:1 phenotypic ratio (dominant:recessive). A chi-square goodness of fit test asks: are our observed counts consistent with this predicted ratio?
+
+```{r}
+# Observed offspring counts from a monohybrid cross (300 total offspring)
+# Tall (dominant) vs short (recessive)
+observed <- c(Tall = 233, Short = 67)
+
+# Expected ratio 3:1 means 75% and 25% of total
+total <- sum(observed)
+expected_prop <- c(Tall = 0.75, Short = 0.25)
+
+cat("Observed counts:", observed, "\n")
+cat("Expected counts:", total * expected_prop, "\n")
+```
+
+```{r}
+# Chi-square goodness of fit test
+# H₀: the observed frequencies match the 3:1 Mendelian ratio
+# H₁: the observed frequencies deviate from the 3:1 ratio
+chisq.test(observed, p = expected_prop)
+```
+
+::: callout-important
+## Reading the Goodness of Fit Output
+
+| Component | Meaning |
+|-----------|---------|
+| `X-squared` | The test statistic: Σ (O − E)² / E, summed over all categories |
+| `df` | Degrees of freedom = number of categories − 1 |
+| `p-value` | Probability of observing this X² or larger if H₀ is true |
+
+A non-significant result (p > 0.05) means we **fail to reject** the Mendelian ratio — the data are consistent with 3:1. This does not prove the ratio is correct; it means the deviation we observed could plausibly be due to chance.
+:::
+
+```{r}
+# Visualise observed vs expected
+par(mar = c(5, 5, 4, 2))
+counts_matrix <- rbind(Observed = observed,
+                       Expected = total * expected_prop)
+barplot(counts_matrix,
+        beside   = TRUE,
+        col      = c("#2C5F8A", "#A8C4D9"),
+        ylab     = "Number of Offspring",
+        main     = "Monohybrid Cross: Observed vs Expected (3:1)",
+        legend   = TRUE,
+        args.legend = list(bty = "n"))
+```
+
+### Dihybrid Cross — Testing a 9:3:3:1 Ratio
+
+```{r}
+# Dihybrid cross (AaBb × AaBb) predicts 9:3:3:1 for two independent loci
+# Seed shape (Round/Wrinkled) × Seed colour (Yellow/Green)
+observed_dihybrid <- c("Round-Yellow" = 315,
+                       "Round-Green"  = 108,
+                       "Wrinkled-Yellow" = 101,
+                       "Wrinkled-Green"  = 32)
+
+# Expected proportions under 9:3:3:1
+expected_dihybrid <- c(9/16, 3/16, 3/16, 1/16)
+
+chisq.test(observed_dihybrid, p = expected_dihybrid)
+```
+
+------------------------------------------------------------------------
+
+## Part 2: Chi-Square Test of Independence
+
+The test of independence asks whether two categorical variables are associated. Unlike goodness of fit, the expected frequencies are calculated from the **marginal totals** rather than specified in advance.
+
+**Example: Is disease severity independent of treatment type?**
+
+```{r}
+# 200 patients classified by: Treatment (A, B, Placebo) × Outcome (Improved, No Change, Worse)
+disease_table <- matrix(
+  c(52, 18, 10,   # Treatment A
+    44, 22, 14,   # Treatment B
+    20, 12, 8),   # Placebo
+  nrow  = 3,
+  byrow = TRUE,
+  dimnames = list(
+    Treatment = c("Drug A", "Drug B", "Placebo"),
+    Outcome   = c("Improved", "No Change", "Worse")
+  )
+)
+
+addmargins(disease_table)
+```
+
+```{r}
+# Chi-square test of independence
+# H₀: treatment type and outcome are independent
+# H₁: there is an association between treatment and outcome
+chisq_result <- chisq.test(disease_table)
+chisq_result
+```
+
+```{r}
+# Inspect expected counts (required to be ≥ 5 in each cell)
+round(chisq_result$expected, 1)
+```
+
+```{r}
+# Standardised residuals — which cells deviate most from expectation?
+round(chisq_result$stdres, 2)
+```
+
+::: callout-note
+## Standardised Residuals
+
+Standardised residuals larger than |2| indicate cells that contribute disproportionately to the chi-square statistic — these are the cells where observed counts deviate most from what would be expected under independence.
+
+- Positive residual: observed > expected (more common than expected under independence)
+- Negative residual: observed < expected (less common than expected)
+
+These residuals help you interpret *where* the association is coming from, not just whether one exists.
+:::
+
+```{r}
+# Mosaic plot: area of each rectangle is proportional to cell frequency
+mosaicplot(disease_table,
+           col    = c("#2C5F8A", "#A8C4D9", "#C8102E"),
+           main   = "Treatment vs Outcome: Mosaic Plot",
+           shade  = TRUE,
+           las    = 1)
+```
+
+------------------------------------------------------------------------
+
+## Part 3: The Expected Frequency Assumption
+
+The chi-square approximation is only reliable when expected cell counts are large enough. The standard rule is that **all expected frequencies should be ≥ 5** (some texts say ≥ 1 with no more than 20% below 5).
+
+```{r}
+# Rare allele study: small expected counts
+rare_table <- matrix(
+  c(3, 2,
+    15, 20),
+  nrow  = 2,
+  byrow = TRUE,
+  dimnames = list(
+    c("Rare allele", "Common allele"),
+    c("Case", "Control")
+  )
+)
+
+# Chi-square will warn about small expected counts
+chisq.test(rare_table)
+```
+
+```{r}
+# Fisher's exact test — no minimum cell size requirement
+# Use this whenever expected counts are < 5 in any cell
+fisher.test(rare_table)
+```
+
+::: callout-warning
+## Chi-Square vs Fisher's Exact Test
+
+| Situation | Use |
+|-----------|-----|
+| 2×2 table, all expected counts ≥ 5 | Chi-square (or Fisher's — both fine) |
+| 2×2 table, any expected count < 5 | Fisher's exact test |
+| Larger tables (r × c), all expected counts ≥ 5 | Chi-square |
+| Larger tables with small cells | Consider collapsing categories or using simulation |
+
+R's `chisq.test()` will warn you when expected counts are small, but it will still give you a (potentially inaccurate) result. Always check `chisq_result$expected` and switch to `fisher.test()` if needed.
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: Proportions and Bar Charts
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Convert to data frame for ggplot2
+disease_df <- as.data.frame(as.table(disease_table))
+names(disease_df) <- c("Treatment", "Outcome", "Count")
+
+# Calculate proportions within each treatment
+disease_df <- disease_df |>
+  group_by(Treatment) |>
+  mutate(Proportion = Count / sum(Count)) |>
+  ungroup()
+
+disease_df$Outcome <- factor(disease_df$Outcome,
+                               levels = c("Improved", "No Change", "Worse"))
+
+ggplot(disease_df, aes(x = Treatment, y = Proportion, fill = Outcome)) +
+  geom_col(position = "fill", colour = "white", linewidth = 0.3) +
+  scale_fill_manual(values = c("Improved"  = "#2C5F8A",
+                               "No Change" = "#A8C4D9",
+                               "Worse"     = "#C8102E")) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Outcome Proportions by Treatment Group",
+       x     = "Treatment",
+       y     = "Proportion of Patients") +
+  theme_classic(base_size = 13)
+```
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** You cross two dihybrid plants and observe 280 Round-Yellow, 130 Round-Green, 85 Wrinkled-Yellow, and 35 Wrinkled-Green offspring. Which test would you use to determine if this follows a 9:3:3:1 Mendelian ratio?
+
+    a) t-test    b) Chi-square test of independence    c) Chi-square goodness of fit    d) Pearson correlation
+
+**2.** In a 3×2 chi-square test of independence with df = 2, you obtain X² = 7.8. At α = 0.05, is this significant? (Critical value for χ²(2) = 5.99.)
+
+**3.** You run `chisq.test()` on a 2×2 table and R returns a warning: "Chi-squared approximation may be incorrect." What should you do?
+
+**4.** A chi-square test of independence on a treatment × outcome table gives X² = 14.3, df = 4, p = 0.006. Standardised residuals show that the "Drug A / Improved" cell has a residual of +3.2. What does this mean?
+
+**5.** True or False: For a chi-square goodness of fit test with 4 categories, the degrees of freedom equals 4.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** c) Chi-square goodness of fit — You have a specific expected distribution (9:3:3:1) from Mendelian theory, and you want to test whether your observed counts match it. Goodness of fit compares observed frequencies to specified expected proportions. A test of independence would be used if you had two categorical variables and no specific expected ratio.
+
+**2.** Yes, X² = 7.8 is significant because 7.8 > 5.99 (the critical value for χ²(2) at α = 0.05). The p-value is less than 0.05, so we reject H₀ and conclude there is a significant association between the two categorical variables.
+
+**3.** Check the expected frequencies using `chisq_result$expected`. If any expected cell count is less than 5 (especially in a 2×2 table), switch to `fisher.test()` which makes no assumptions about minimum cell sizes and gives an exact p-value. Fisher's exact test is always valid; the chi-square approximation is not reliable with small expected counts.
+
+**4.** A standardised residual of +3.2 for the Drug A / Improved cell means that patients on Drug A improved substantially more than would be expected if treatment and outcome were independent. The magnitude (|3.2| > 2) confirms this cell is a major driver of the overall significant result. Drug A appears to be the most effective treatment.
+
+**5.** False — df = number of categories − 1 = 4 − 1 = **3**. In a goodness of fit test, one degree of freedom is lost because the expected frequencies must sum to the total observed count (a constraint on the data).
+:::
+
+------------------------------------------------------------------------
+
+## Lab 23 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Explain the difference between a goodness of fit test and a test of independence
+- [ ] Run `chisq.test(observed, p = expected_proportions)` for goodness of fit
+- [ ] Build a contingency table with `matrix()` and run `chisq.test()` on it
+- [ ] Check expected cell frequencies with `chisq_result$expected`
+- [ ] Identify when Fisher's exact test is needed and run `fisher.test()`
+- [ ] Interpret X², df, and p-value from chi-square output
+- [ ] Examine standardised residuals to identify which cells drive a significant result
+
+::: callout-tip
+## Bonus Challenge
+
+A genetics study crosses AaBbCc × AaBbCc (three independent loci). The expected phenotypic ratios are 27:9:9:9:3:3:3:1 (there are 8 phenotypic classes from three loci with independent assortment). Simulate 500 offspring under these ratios using `sample()` or `rmultinom()`, then add small random deviations and test whether your observed counts are consistent with the expected 27:9:9:9:3:3:3:1 ratio. What is the df?
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Friday)
+
+- Friday (Lab 24): Hardy-Weinberg Equilibrium — allele frequency theory and testing real populations
+- **Quiz 6** is Friday of Week 10 — covers Labs 21–24
+
+------------------------------------------------------------------------

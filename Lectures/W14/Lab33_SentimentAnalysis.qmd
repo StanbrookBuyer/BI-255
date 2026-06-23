@@ -1,0 +1,469 @@
+---
+title: "Lab 33: Text as Data — Sentiment Analysis"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "November 20, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Words Are Data Too
+
+Every statistical technique we have covered has dealt with numeric data — measurements, counts, coordinates. But an enormous proportion of the information humans generate is **text**: clinical notes, social media posts, open-ended survey responses, research abstracts, and song lyrics. **Text mining** converts words into numbers that can then be analysed with the tools you already know.
+
+This lab uses **sentiment analysis** — classifying words as positive, negative, or emotionally charged — applied to one of the most culturally significant bodies of work in contemporary American music: the discography of Kendrick Lamar. His 2024–2025 period produced the Grammy-winning album *GNX*, the record-breaking diss track "Not Like Us," and five Grammy wins — making him the most decorated rapper in Grammy history for a single night. His lyrics are richly layered, making them ideal data for exploring sentiment, word frequency, and how emotional tone shifts across albums.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Tokenise text into individual words using `tidytext::unnest_tokens()`
+2. Remove stop words with `anti_join(stop_words)`
+3. Compute word frequencies and visualise them as bar charts and word clouds
+4. Join text data to sentiment lexicons (AFINN, Bing, NRC)
+5. Track sentiment over the course of a text using a moving average
+6. Compare sentiment profiles across different texts or time periods
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Introduction to tidytext
+
+```{r}
+# install.packages(c("tidytext", "wordcloud", "reshape2", "RColorBrewer"))
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+```
+
+The **tidy text format** has one word per row, paired with metadata about which document, line, or chapter it came from. We tokenise text (split it into individual words) and then join to other tables of information.
+
+::: callout-important
+## About the Lyrics Used in This Lab
+
+The text in this lab consists of short representative excerpts and simulated representative verse data that reflect the **themes and style** of Kendrick Lamar's work — not direct transcriptions of copyrighted material. This approach allows us to illustrate all text-mining methods correctly. When you replicate this analysis on your own, you can use full lyrics obtained from licensed sources such as Genius.com (for personal/educational use) or the `genius` R package.
+
+Themes in Kendrick's work that we capture here: systemic racism, Black identity and excellence, community, spirituality, introspection, grief, resilience, and righteous anger.
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: Building a Lyrics Dataset
+
+```{r}
+# Representative lyrical themes from three Kendrick Lamar works
+# These are thematic/stylistic representations, not direct lyrics
+
+album_data <- data.frame(
+  album = c(
+    rep("good kid, m.A.A.d city", 40),
+    rep("To Pimp a Butterfly", 40),
+    rep("GNX", 40)
+  ),
+  line_num = c(1:40, 1:40, 1:40),
+  text = c(
+    # good kid, m.A.A.d city (2012) — street survival, community, family
+    "they said the city was cold but the homies kept me warm",
+    "trying to find a way out of this concrete jungle alive",
+    "my mama prayed for me every single morning before sunrise",
+    "loyalty and love held together by a fragile thread",
+    "danger lurks around every corner in the city at night",
+    "resilience grew deep inside when nobody else believed",
+    "survival is the only gospel preached on these broken streets",
+    "lost too many brothers to the violence and the drugs",
+    "the innocence of childhood stolen by the neighbourhood",
+    "faith was the anchor when hope felt distant and impossible",
+    "community fractured by poverty and systemic neglect",
+    "strength inherited from ancestors who endured the unimaginable",
+    "love for the people even when the system showed hatred",
+    "the city swallowed the weak and humbled the arrogant",
+    "family the only sanctuary in a world of chaos",
+    "searching for peace beneath the noise and the pressure",
+    "trauma handed down through generations like a curse",
+    "beauty existed even in the most broken neighbourhoods",
+    "they told us our dreams were too large for our zip code",
+    "refusing to be defined by the poverty of my beginning",
+    "the night sky offered freedom that the streets denied",
+    "brotherhood forged in hardship outlasted everything else",
+    "grief and joy existed side by side in our home",
+    "the mothers of the city bore the heaviest burdens quietly",
+    "identity was something to be discovered not assigned",
+    "courage meant walking out the front door every morning",
+    "the world outside was hostile but we built warmth inside",
+    "laughter survived even in the darkest stretches of time",
+    "legacy was the one thing poverty could never take away",
+    "love was the radical act of survival in the city",
+    "accountability was rare in a world that rewarded deception",
+    "hope was the most dangerous thing to carry in the city",
+    "the city taught hard lessons without mercy or hesitation",
+    "purpose felt distant but never entirely out of reach",
+    "dignity was something you had to claim for yourself daily",
+    "the ancestors watched from somewhere beyond the violence",
+    "healing required admitting the wounds were real and deep",
+    "joy was revolutionary in a space designed for suffering",
+    "the narrative of failure was written by those who feared us",
+    "every sunrise was a gift and a challenge and a prayer",
+
+    # To Pimp a Butterfly (2015) — Black identity, systemic racism, resistance, love
+    "the institution was designed to keep us in a permanent cycle",
+    "Black excellence is not the exception it is the rule",
+    "love is the most radical political act we possess",
+    "the caterpillar became a butterfly despite the cocoon",
+    "systemic chains invisible but as real as concrete walls",
+    "music was the language when every other door was closed",
+    "self-hatred was the poison planted by an oppressive history",
+    "identity reclaimed through art and through community",
+    "the mirror showed a king when the world called us less",
+    "anger was justified grief dressed in different clothing",
+    "the revolution begins when you love yourself completely",
+    "Africa lived in our bones long before we knew the word",
+    "pride in Blackness was the most subversive act available",
+    "joy and pain and love and rage existed in the same breath",
+    "they counted us as less but we knew we were infinite",
+    "solidarity was the armour against a world that diminished us",
+    "truth-telling was dangerous and necessary and sacred",
+    "spirituality grounded us when institutions abandoned us",
+    "the stories of our elders were the map to our survival",
+    "beauty in Blackness was never debatable only undeniable",
+    "depression lived quietly beneath the surface of success",
+    "vulnerability was strength not weakness in the new narrative",
+    "freedom required imagining a world the oppressor never built",
+    "love healed what institutions fractured deliberately",
+    "the butterfly understood the caterpillar was never its prison",
+    "complexity was our birthright they preferred simple caricature",
+    "consciousness was the first revolution everything else followed",
+    "the culture belonged to us regardless of who profited",
+    "resistance took infinite forms and all of them were valid",
+    "accountability to community was the highest form of loyalty",
+    "excellence was our inheritance not their gift to bestow",
+    "the wound was deep but the healing was possible and near",
+    "power was not given it was taken back piece by piece",
+    "grief transformed to fuel when the rage became purposeful",
+    "the ancestors' sacrifices demanded more than survival alone",
+    "brilliance was ordinary among us only extraordinary to them",
+    "the world needed our perspective more than our performance",
+    "peace required justice and justice required truth first",
+    "love for self was the prerequisite for loving the community",
+    "the butterfly flew free and the caterpillar was never forgotten",
+
+    # GNX (2024) — legacy, accountability, confrontation, vindication, spirituality
+    "legacy built brick by brick over decades of discipline",
+    "accountability demanded from peers who chose comfort over truth",
+    "the crown was never given it was taken with purpose",
+    "confronting pretenders is not aggression it is necessary honesty",
+    "spiritual grounding kept me rooted when the noise was loudest",
+    "victory was sweeter because they insisted defeat was certain",
+    "authenticity in a culture of performance is a radical stance",
+    "the children watching needed to see courage modelled clearly",
+    "love for the community demanded difficult uncomfortable truths",
+    "legacy is not fame it is the change left in your wake",
+    "those who sought to diminish only amplified the truth",
+    "history will judge clearly when the noise finally settles",
+    "humility and confidence coexisted they were never opposites",
+    "the work spoke louder than any manufactured controversy",
+    "righteous anger channelled into art was the highest form",
+    "leadership required being willing to stand alone if necessary",
+    "God was in the details of every carefully chosen word",
+    "the culture shifts when someone refuses to bend to mediocrity",
+    "clarity came only after surviving the very loudest storms",
+    "excellence sustained over decades is its own powerful argument",
+    "the record corrected what the propaganda attempted to distort",
+    "peace was earned not given by those threatened by the light",
+    "the next generation deserved honest models not sanitised ones",
+    "truth required repetition in a world designed to forget",
+    "winning meant nothing if it compromised what mattered most",
+    "the spirit of Compton carried into every room every stage",
+    "discipline separated ambition from achievement over time",
+    "love was the through line connecting everything else together",
+    "the critics misunderstood because they measured wrong things",
+    "vindication arrived quietly and without need for celebration",
+    "strength of character is tested most in moments of provocation",
+    "the archive of work was the most reliable witness available",
+    "joy arrived when the purpose aligned with the execution",
+    "community over individual was never a slogan but a practice",
+    "the story was never finished there was always more to say",
+    "honesty in a dishonest industry was the most radical act",
+    "the children who looked up deserved authenticity not theatre",
+    "healing the community required healing oneself completely first",
+    "the art outlasted the controversy as it always does",
+    "gratitude for the struggle because the struggle built everything"
+  ),
+  stringsAsFactors = FALSE
+)
+
+cat("Dataset dimensions:", nrow(album_data), "lines across",
+    length(unique(album_data$album)), "albums\n")
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Tokenisation and Word Frequency
+
+```{r}
+# Tokenise: split each line into individual words, one word per row
+words_df <- album_data |>
+  unnest_tokens(word, text)
+
+cat("Total word tokens:", nrow(words_df), "\n")
+
+# Remove stop words (common words with little meaning: the, a, in, was, ...)
+data(stop_words)   # built into tidytext
+
+words_clean <- words_df |>
+  anti_join(stop_words, by = "word")
+
+cat("After removing stop words:", nrow(words_clean), "\n")
+```
+
+```{r}
+# Most frequent words overall
+top_words <- words_clean |>
+  count(word, sort = TRUE) |>
+  slice_head(n = 20)
+
+ggplot(top_words, aes(x = reorder(word, n), y = n)) +
+  geom_col(fill = "#2C5F8A") +
+  coord_flip() +
+  labs(title = "Most Frequent Words — Kendrick Lamar (Three Albums)",
+       x     = NULL,
+       y     = "Word count") +
+  theme_classic(base_size = 13)
+```
+
+```{r}
+# Word frequency by album
+top_by_album <- words_clean |>
+  group_by(album) |>
+  count(word, sort = TRUE) |>
+  slice_head(n = 10) |>
+  ungroup()
+
+ggplot(top_by_album, aes(x = reorder(word, n), y = n, fill = album)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~album, scales = "free_y") +
+  coord_flip() +
+  scale_fill_manual(values = c("good kid, m.A.A.d city" = "#2C5F8A",
+                               "To Pimp a Butterfly"     = "#C8102E",
+                               "GNX"                     = "#5B8DB8")) +
+  labs(title = "Top Words by Album",
+       x = NULL, y = "Count") +
+  theme_classic(base_size = 11)
+```
+
+------------------------------------------------------------------------
+
+## Part 4: Sentiment Lexicons
+
+Three widely used sentiment lexicons are built into `tidytext`:
+
+- **AFINN**: assigns each word a score from -5 (very negative) to +5 (very positive)
+- **Bing**: binary classification — "positive" or "negative"
+- **NRC**: emotion categories — anger, joy, sadness, fear, trust, disgust, surprise, anticipation, positive, negative
+
+```{r}
+# AFINN: numeric sentiment scores
+afinn <- get_sentiments("afinn")
+head(afinn, 8)
+```
+
+```{r}
+# Join our words to AFINN scores
+words_afinn <- words_clean |>
+  inner_join(afinn, by = "word")
+
+# Mean sentiment score by album
+words_afinn |>
+  group_by(album) |>
+  summarise(
+    mean_sentiment = round(mean(value), 3),
+    total_words    = n(),
+    .groups        = "drop"
+  ) |>
+  arrange(mean_sentiment)
+```
+
+```{r}
+# NRC: emotion categories
+nrc <- get_sentiments("nrc")
+
+# Which emotions feature most prominently by album?
+words_nrc <- words_clean |>
+  inner_join(nrc, by = "word") |>
+  filter(!sentiment %in% c("positive", "negative"))  # keep emotion categories
+
+nrc_counts <- words_nrc |>
+  group_by(album, sentiment) |>
+  summarise(n = n(), .groups = "drop")
+
+ggplot(nrc_counts, aes(x = sentiment, y = n, fill = album)) +
+  geom_col(position = "dodge", colour = "white") +
+  scale_fill_manual(values = c("good kid, m.A.A.d city" = "#2C5F8A",
+                               "To Pimp a Butterfly"     = "#C8102E",
+                               "GNX"                     = "#5B8DB8")) +
+  labs(title = "Emotion Profile by Album (NRC Lexicon)",
+       x     = "Emotion", y = "Word count",
+       fill  = "Album") +
+  theme_classic(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+------------------------------------------------------------------------
+
+## Part 5: Sentiment Trajectory — How Does Tone Shift?
+
+```{r}
+# Track sentiment across lines within each album using AFINN
+sentiment_trajectory <- words_clean |>
+  inner_join(afinn, by = "word") |>
+  group_by(album, line_num) |>
+  summarise(line_sentiment = sum(value), .groups = "drop")
+
+# Smooth with a 5-line rolling average
+library(zoo)   # for rollmean
+sentiment_trajectory <- sentiment_trajectory |>
+  arrange(album, line_num) |>
+  group_by(album) |>
+  mutate(rolling_sentiment = rollmean(line_sentiment, k = 5,
+                                      fill = NA, align = "center")) |>
+  ungroup()
+
+ggplot(sentiment_trajectory, aes(x = line_num, colour = album)) +
+  geom_line(aes(y = line_sentiment), alpha = 0.25, linewidth = 0.5) +
+  geom_line(aes(y = rolling_sentiment), linewidth = 1.3, na.rm = TRUE) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
+  scale_colour_manual(values = c("good kid, m.A.A.d city" = "#2C5F8A",
+                                 "To Pimp a Butterfly"     = "#C8102E",
+                                 "GNX"                     = "#5B8DB8")) +
+  facet_wrap(~album, nrow = 3) +
+  labs(title    = "Sentiment Trajectory Across Each Album",
+       subtitle  = "Thin line = per-line; thick line = 5-line rolling average",
+       x        = "Line number",
+       y        = "AFINN sentiment score") +
+  theme_classic(base_size = 12) +
+  theme(legend.position = "none")
+```
+
+------------------------------------------------------------------------
+
+## Part 6: Word Cloud
+
+```{r}
+library(wordcloud)
+library(RColorBrewer)
+
+# Word cloud for "To Pimp a Butterfly"
+tpab_words <- words_clean |>
+  filter(album == "To Pimp a Butterfly") |>
+  count(word, sort = TRUE)
+
+set.seed(42)
+wordcloud(words  = tpab_words$word,
+          freq   = tpab_words$n,
+          min.freq = 1,
+          max.words = 60,
+          colors = brewer.pal(8, "Blues"),
+          scale  = c(3.5, 0.5),
+          random.order = FALSE)
+title("To Pimp a Butterfly — Word Cloud")
+```
+
+::: callout-note
+## Limitations of Dictionary-Based Sentiment Analysis
+
+The AFINN and Bing lexicons were built from general text (tweets, product reviews, news). They have known limitations when applied to song lyrics:
+
+1. **Context is ignored**: the word "sick" means excellent in hip-hop slang, but AFINN scores it negatively.
+2. **Negation is ignored**: "not happy" is treated as if each word were separate.
+3. **Irony and sarcasm are invisible** to a lexicon-based approach.
+4. **Domain mismatch**: lexicons trained on product reviews miss the connotations of culture-specific language.
+
+More sophisticated approaches — VADER (built for social media), BERT-based transformers, or domain-specific lexicons — address some of these limitations, but they require more computing resources than are available in this course.
+
+Despite these limitations, lexicon-based sentiment analysis remains extremely widely used in computational social science and is a valid starting point.
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** What does `unnest_tokens(word, text)` do to a data frame?
+
+**2.** After tokenising, you use `anti_join(stop_words)`. Why, and what are stop words?
+
+**3.** You join your word data to the AFINN lexicon and find mean sentiment = −0.8 for Album A and +1.2 for Album B. What does this tell you?
+
+**4.** In the NRC lexicon, a word can have multiple entries (e.g., "love" is coded as both "positive" and "joy"). Why is this actually more useful than a single-category system for emotional analysis?
+
+**5.** True or False: A sentiment lexicon approach correctly handles sarcasm and negation (e.g., "not sad").
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** `unnest_tokens(word, text)` splits each row's text into individual words, creating one row per word. The first argument (`word`) names the new column; the second (`text`) is the column containing the original text. It simultaneously lowercases everything and removes punctuation, putting the data in the **tidy text format**: one token per row.
+
+**2.** Stop words are extremely common words that appear in nearly all text and carry little meaningful content: "the," "a," "and," "in," "was," etc. `anti_join(stop_words)` removes all words that appear in the `stop_words` table from tidytext. This is important because without removal, stop words would dominate word frequency counts and obscure the words that actually differentiate texts from each other.
+
+**3.** Album A has a more negative mean sentiment (mean AFINN score = −0.8 across all sentiment-carrying words), while Album B has a more positive mean sentiment (+1.2). This means the sentiment-carrying vocabulary in Album A leans toward negatively-valenced words and in Album B toward positive ones. However, interpretation requires caution — this could reflect genuine emotional content, or it could reflect domain mismatch between the lexicon and the genre.
+
+**4.** Multiple emotion categories per word allows more nuanced analysis than a single positive/negative binary. A word like "powerful" might be tagged as "positive" AND "trust" — capturing both the valence and the specific emotional quality. This allows separate analysis of, for example, how much "fear" versus "anger" appears in a text, even though both are negative emotions. The multi-category approach aligns with psychological models of emotion (e.g., Plutchik's wheel of emotions).
+
+**5.** False — Basic lexicon approaches do not handle sarcasm or negation. "Not sad" would be parsed as two separate tokens: "not" (usually removed as a stop word or not in the lexicon) and "sad" (scored negatively). The negation "not" is lost. Similarly, sarcasm ("That was just great") would be scored positively even though the intended meaning is negative. This is a fundamental limitation of bag-of-words sentiment approaches.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 33 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Tokenise text with `unnest_tokens(word, text)`
+- [ ] Remove stop words with `anti_join(stop_words)`
+- [ ] Count word frequencies with `count(word, sort = TRUE)` and visualise with `geom_col()`
+- [ ] Join to a sentiment lexicon with `inner_join(get_sentiments("afinn"))`
+- [ ] Calculate mean AFINN sentiment by document/album
+- [ ] Use the NRC lexicon to produce an emotion profile
+- [ ] Explain three limitations of dictionary-based sentiment analysis
+
+::: callout-tip
+## Bonus Challenge
+
+Apply the same pipeline to a different body of text. Good options: (1) Download abstracts from a PubMed search on a disease of your choice (use the `easyPubMed` package) and assess whether the sentiment in abstracts changed over time; (2) Analyse sentiment in your own written lab reports — copy your text into R and see which reports were most positively or negatively framed; (3) Use the `genius` R package to download lyrics from another artist and compare their emotional profile to Kendrick Lamar's across multiple albums.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Monday, Week 15)
+
+- Monday (Lab 34): Scientific poster preparation — designing your final poster, preparing publication-quality R figures, and peer review practice
+- **Final poster presentations** are in the exam period — check Canvas for date, time, and format requirements
+
+------------------------------------------------------------------------

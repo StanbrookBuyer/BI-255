@@ -1,0 +1,369 @@
+---
+title: "Lab 14: Contingency Tables, Mosaic Plots, Odds Ratios & Chi-square Independence"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "September 25, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Associations Between Categorical Variables
+
+Many important biological questions involve two categorical variables: Does a genetic variant increase disease risk? Are a drug's side effects more common in one sex? Is smoking associated with a particular cancer type? These questions are answered by analysing **contingency tables** — cross-tabulations of two categorical variables.
+
+This lab covers the construction and visualisation of contingency tables, the chi-square test for independence, Fisher's exact test for small samples, and the odds ratio as a measure of association strength.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Build and interpret a two-way contingency table
+2. Visualise associations using `mosaicplot()`
+3. Test for independence using `chisq.test()`
+4. Interpret chi-square output: test statistic, degrees of freedom, p-value
+5. Apply Fisher's exact test when sample sizes are small
+6. Calculate and interpret an odds ratio
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Contingency Tables in Genetics
+
+A classic application is testing whether a genetic variant is associated with disease. Suppose a case-control study genotypes 500 individuals for a single nucleotide polymorphism (SNP). Each individual is classified by genotype (carriers of the minor allele vs homozygous reference) and disease status.
+
+```{r}
+# Genotype data: 500 individuals
+# Rows: Disease status (Case / Control)
+# Columns: Genotype (Carrier = at least one minor allele / Non-carrier)
+
+snp_table <- matrix(
+  c(120, 80,   # Cases: carrier, non-carrier
+    90, 210),  # Controls: carrier, non-carrier
+  nrow     = 2,
+  byrow    = TRUE,
+  dimnames = list(
+    Status   = c("Case", "Control"),
+    Genotype = c("Carrier", "Non-carrier")
+  )
+)
+
+snp_table
+```
+
+```{r}
+# Margins: row totals and column totals
+addmargins(snp_table)
+```
+
+```{r}
+# Row proportions: within cases, what fraction are carriers?
+round(prop.table(snp_table, margin = 1), 3)
+```
+
+::: callout-note
+## Reading a Contingency Table
+
+The table above is called a **2×2 contingency table**. Each cell contains the count of individuals with that combination of row and column categories.
+
+The key question: **is genotype independent of disease status?**
+
+If independent, the proportion of carriers among cases should be the same as among controls. Looking at the proportions: carriers make up 60% of cases but only 30% of controls. This suggests an association — but is it statistically significant?
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: Mosaic Plots
+
+A mosaic plot visualises a contingency table as a set of rectangles, where the area of each rectangle is proportional to the cell count.
+
+```{r}
+mosaicplot(snp_table,
+           col    = c("#2C5F8A", "#A8C4D9"),
+           main   = "SNP Genotype by Disease Status",
+           xlab   = "Disease Status",
+           ylab   = "Genotype",
+           border = "white")
+```
+
+::: callout-tip
+## Reading a Mosaic Plot
+
+- The **width** of each column is proportional to the total in that row category
+- The **height** of each segment within a column is proportional to the proportion in that cell
+- If there were **no association**, the segment heights would be the same in every column
+- Segments of unequal height signal a potential association
+:::
+
+------------------------------------------------------------------------
+
+## Part 3: The Chi-Square Test for Independence
+
+The chi-square test asks: **are the observed cell counts consistent with what we would expect if the two variables were independent?**
+
+```{r}
+# Chi-square test of independence
+chi_result <- chisq.test(snp_table)
+chi_result
+```
+
+```{r}
+# Expected counts under independence (what we would see if there were no association)
+chi_result$expected
+```
+
+```{r}
+# Observed vs expected
+cat("Observed:\n")
+print(snp_table)
+
+cat("\nExpected under independence:\n")
+round(chi_result$expected, 1)
+```
+
+::: callout-important
+## Interpreting the Chi-Square Test
+
+The chi-square statistic measures how far the observed counts deviate from the expected counts under independence:
+
+X² = sum( (Observed − Expected)² / Expected )
+
+A large X² → large deviation from independence → small p-value → evidence against independence.
+
+**Degrees of freedom** for a 2×2 table = (rows − 1) × (cols − 1) = 1.
+
+The **assumption** of the chi-square test: expected counts in every cell should be ≥ 5. If not, use Fisher's exact test instead.
+:::
+
+### Examining the Residuals
+
+```{r}
+# Standardised residuals: large absolute values indicate which cells drive the association
+round(chi_result$stdres, 2)
+```
+
+::: callout-note
+## Standardised Residuals
+
+Standardised residuals above |2| indicate cells that contribute most to the chi-square statistic. Here, the excess of carriers among cases (and deficit among controls) are the main drivers of the association.
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: Fisher's Exact Test
+
+When expected cell counts fall below 5 (common in rare disease studies or when sample sizes are small), the chi-square approximation is not reliable. Fisher's exact test calculates the exact p-value without any approximation.
+
+```{r}
+# Suppose we have a much smaller sample from a rare disease study
+rare_table <- matrix(
+  c(8, 2,
+    3, 12),
+  nrow     = 2,
+  dimnames = list(Status   = c("Case", "Control"),
+                  Exposure = c("Exposed", "Unexposed"))
+)
+
+rare_table
+addmargins(rare_table)
+```
+
+```{r}
+# Chi-square would give unreliable results here (some cells < 5)
+# Always use Fisher's exact test for small samples
+fisher.test(rare_table)
+```
+
+::: callout-tip
+## When to Use Fisher's Exact Test
+
+Use Fisher's exact test when:
+- Any **expected** cell count is < 5
+- Total sample size is small (< 20–30)
+- You want an exact p-value rather than an asymptotic approximation
+
+Fisher's test is always valid; chi-square is an approximation that breaks down in small samples.
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: Odds Ratios
+
+The **odds ratio (OR)** quantifies the strength of association in a 2×2 table. It compares the odds of the outcome in one group to the odds in another.
+
+For our SNP table:
+
+```{r}
+# Odds ratio calculation
+# Odds of disease for carriers = cases with carrier / controls with carrier
+# Odds of disease for non-carriers = cases with non-carrier / controls with non-carrier
+
+a <- snp_table["Case",    "Carrier"]
+b <- snp_table["Control", "Carrier"]
+c <- snp_table["Case",    "Non-carrier"]
+d <- snp_table["Control", "Non-carrier"]
+
+OR <- (a / b) / (c / d)
+cat("Odds Ratio:", round(OR, 3), "\n")
+```
+
+```{r}
+# Fisher's test also reports the OR and its confidence interval
+fisher_result <- fisher.test(snp_table)
+cat("OR from Fisher's test:", round(fisher_result$estimate, 3), "\n")
+cat("95% CI:", round(fisher_result$conf.int, 3), "\n")
+```
+
+::: callout-important
+## Interpreting the Odds Ratio
+
+| OR value | Interpretation |
+|----------|---------------|
+| OR = 1 | No association — equal odds in both groups |
+| OR > 1 | Increased odds of outcome in the exposed/carrier group |
+| OR < 1 | Decreased odds (protective association) |
+
+For our SNP: OR ≈ 3.5 means carriers have approximately 3.5 times the odds of disease compared to non-carriers.
+
+The 95% CI for the OR is critical: if it does not cross 1.0, the association is statistically significant at α = 0.05.
+:::
+
+------------------------------------------------------------------------
+
+## Part 6: A Full Worked Example — Drug Side Effects
+
+A clinical trial of a new antibiotic records whether patients experienced gastrointestinal side effects, stratified by sex:
+
+```{r}
+side_effects <- matrix(
+  c(45, 105,   # Female: side effect yes, no
+    28, 122),  # Male: side effect yes, no
+  nrow     = 2,
+  byrow    = TRUE,
+  dimnames = list(Sex        = c("Female", "Male"),
+                  SideEffect = c("Yes", "No"))
+)
+
+cat("Contingency table:\n")
+addmargins(side_effects)
+```
+
+```{r}
+# Row proportions
+cat("\nRow proportions:\n")
+round(prop.table(side_effects, margin = 1), 3)
+```
+
+```{r}
+# Chi-square test
+chi_se <- chisq.test(side_effects)
+chi_se
+```
+
+```{r}
+# Odds ratio via Fisher's test
+fisher_se <- fisher.test(side_effects)
+cat("Odds Ratio:", round(fisher_se$estimate, 3), "\n")
+cat("95% CI:", round(fisher_se$conf.int, 3), "\n")
+```
+
+```{r}
+# Visualise
+mosaicplot(side_effects,
+           col    = c("#C8102E60", "#2C5F8A60"),
+           main   = "Gastrointestinal Side Effects by Sex",
+           xlab   = "Sex",
+           ylab   = "Side Effect",
+           border = "white")
+```
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** In a 2×2 contingency table, the degrees of freedom for a chi-square test equals:
+
+    a) 1    b) 2    c) n − 1    d) (rows × cols) − 1
+
+**2.** You find that one expected cell count in your 2×2 table is 3.2. Which test should you use?
+
+    a) Chi-square test    b) t-test    c) Fisher's exact test    d) ANOVA
+
+**3.** An odds ratio of 0.4 with a 95% CI of (0.2, 0.8) indicates:
+
+    a) No association    b) A significant protective association    c) A significant risk factor    d) An inconclusive result because OR < 1
+
+**4.** In a mosaic plot, what does it mean if the segment heights are the same in every column?
+
+**5.** True or False: The chi-square test of independence tests whether the mean of one variable differs across levels of another variable.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** a) 1 — For a 2×2 contingency table, df = (2−1) × (2−1) = 1. For larger tables, df = (r−1)(c−1).
+
+**2.** c) Fisher's exact test — The chi-square approximation is unreliable when any **expected** count is < 5. Fisher's exact test is always valid regardless of sample size and should be used here.
+
+**3.** b) A significant protective association — OR < 1 means the exposed group has lower odds of the outcome. The 95% CI does not include 1.0 (it runs from 0.2 to 0.8), so the association is statistically significant at α = 0.05. The factor under study appears to reduce risk.
+
+**4.** If segment heights are equal across columns, the proportion of each category is the same in every group — this is exactly what **independence** looks like in a mosaic plot. No visual difference between columns = no association.
+
+**5.** **False** — The chi-square test of independence tests whether **two categorical variables are statistically independent** — i.e., whether the distribution of one variable differs across levels of the other. It does not involve means. Tests involving means (continuous outcomes) use t-tests or ANOVA.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 14 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Build a contingency table with `matrix()` and label it with `dimnames`
+- [ ] Compute marginal totals with `addmargins()` and proportions with `prop.table()`
+- [ ] Visualise a contingency table with `mosaicplot()`
+- [ ] Run a chi-square test with `chisq.test()` and interpret the output
+- [ ] Identify when expected counts are too small and use `fisher.test()` instead
+- [ ] Calculate an odds ratio from a 2×2 table manually and via `fisher.test()`
+- [ ] Interpret an OR with a 95% CI: what does it mean if the CI crosses 1?
+
+::: callout-tip
+## Bonus Challenge
+
+Find a published 2×2 contingency table from a genetics or epidemiology paper (Google Scholar: "SNP case control contingency table"). Re-create the table in R, run both the chi-square and Fisher's exact tests, calculate the odds ratio, and produce a mosaic plot. Write two sentences interpreting the association.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Week 7 — Monday)
+
+- Monday (Lab 15): The Normal Distribution and Central Limit Theorem
+- Read **R for Data Science Ch. 9–10**
+- Make sure you are comfortable with `pnorm()` and `qnorm()` — we will use them extensively
+
+------------------------------------------------------------------------

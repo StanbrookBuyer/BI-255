@@ -1,0 +1,471 @@
+---
+title: "Lab 9: Data Wrangling with dplyr"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "September 11, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Wrangling NFL Data with dplyr
+
+Every real dataset needs to be cleaned, reorganized, and summarized before you can analyze it. **dplyr** (pronounced "dee-ply-er") is the most popular R package for this and once you learn its six main verbs, you'll use them in virtually every analysis you ever do.
+
+Today we'll learn dplyr using NFL player stats, which come in exactly the kind of messy, multi-column format that real biological data does too.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Install and load packages using `install.packages()` and `library()`
+2. Use the pipe operator `|>` to chain operations
+3. Filter rows with `filter()`
+4. Select columns with `select()`
+5. Create new columns with `mutate()`
+6. Sort data with `arrange()`
+7. Summarize data with `summarize()` and `group_by()`
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Installing and Loading Packages
+
+R comes with a lot built in, but much of its power comes from **packages** — collections of extra functions written by the R community.
+
+::: callout-important
+## Installing vs. Loading a Package
+
+**Install** = download to your computer (do this ONCE):
+```r
+install.packages("dplyr")
+```
+
+**Load** = activate for use in this session (do this EVERY time):
+```r
+library(dplyr)
+```
+
+Think of installing like buying a book, and loading like opening it to read.
+:::
+
+```{r}
+# If you haven't installed dplyr yet, uncomment the line below:
+# install.packages("dplyr")
+
+library(dplyr)
+```
+
+------------------------------------------------------------------------
+
+## Part 2: Our Dataset — 2025 NFL Season Stats
+
+```{r}
+# NFL skill player stats for the 2025-26 season (simulated)
+nfl <- data.frame(
+  player      = c("Patrick Mahomes", "Lamar Jackson", "Jalen Hurts",
+                   "Josh Allen", "Justin Herbert", "Dak Prescott",
+                   "Brock Purdy", "Tua Tagovailoa", "CJ Stroud", "Joe Burrow",
+                   "Tyreek Hill", "Justin Jefferson", "CeeDee Lamb",
+                   "Stefon Diggs", "Davante Adams", "DK Metcalf",
+                   "Cooper Kupp", "Ja'Marr Chase", "Travis Kelce",
+                   "Mark Andrews", "Darren Waller", "Sam LaPorta",
+                   "Derrick Henry", "Christian McCaffrey", "Josh Jacobs",
+                   "Tony Pollard", "Saquon Barkley", "Breece Hall",
+                   "Isiah Pacheco", "Jonathan Taylor"),
+  position    = c(rep("QB", 10), rep("WR", 8), rep("TE", 4), rep("RB", 8)),
+  team        = c("KC", "BAL", "PHI", "BUF", "LAC", "DAL", "SF", "MIA", "HOU", "CIN",
+                   "MIA", "MIN", "DAL", "BUF", "GB", "SEA", "LAR", "CIN",
+                   "KC", "BAL", "LV", "DET",
+                   "TEN", "SF", "GB", "DAL", "PHI", "NYJ", "KC", "IND"),
+  conference  = c(rep("AFC", 1), rep("AFC", 1), rep("NFC", 1), rep("AFC", 1),
+                   rep("AFC", 1), rep("NFC", 1), rep("NFC", 1), rep("AFC", 1),
+                   rep("AFC", 1), rep("AFC", 1),
+                   rep("AFC", 1), rep("NFC", 1), rep("NFC", 1), rep("AFC", 1),
+                   rep("NFC", 1), rep("NFC", 1), rep("NFC", 1), rep("AFC", 1),
+                   rep("AFC", 1), rep("AFC", 1), rep("AFC", 1), rep("NFC", 1),
+                   rep("AFC", 1), rep("NFC", 1), rep("NFC", 1), rep("NFC", 1),
+                   rep("NFC", 1), rep("AFC", 1), rep("AFC", 1), rep("AFC", 1)),
+  games       = c(16, 17, 15, 17, 16, 14, 17, 15, 17, 13,
+                   17, 17, 17, 14, 16, 17, 15, 17,
+                   17, 16, 12, 17,
+                   17, 14, 17, 17, 17, 16, 17, 11),
+  yards       = c(4839, 3678, 3858, 4306, 3764, 3247, 4280, 3561, 4108, 2987,
+                   1481, 1529, 1749, 1095, 1144, 1249, 1002, 1455,
+                   984, 847, 762, 1130,
+                   1458, 1459, 1166, 1024, 1499, 1187, 872, 897),
+  touchdowns  = c(38, 24, 31, 40, 26, 22, 28, 24, 33, 19,
+                   13, 10, 17, 9, 12, 11, 8, 14,
+                   8, 9, 6, 10,
+                   12, 11, 8, 7, 13, 9, 6, 7),
+  pro_bowl    = c(TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, FALSE, FALSE, TRUE, TRUE,
+                   TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, TRUE,
+                   TRUE, TRUE, FALSE, FALSE,
+                   FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE)
+)
+```
+
+Let's get a quick look at what we're working with:
+
+```{r}
+dim(nfl)
+head(nfl)
+```
+
+------------------------------------------------------------------------
+
+## Part 3: The Pipe Operator `|>`
+
+Before learning the dplyr verbs, we need to understand the **pipe** `|>`. It takes the output of one function and passes it as the **first argument** to the next function.
+
+```{r}
+# Without pipe (hard to read, right?)
+head(filter(nfl, position == "QB"), 3)
+```
+
+```{r}
+# With pipe (reads left-to-right like a sentence)
+nfl |> filter(position == "QB") |> head(3)
+```
+
+::: callout-tip
+## Reading the Pipe as "then"
+`nfl |> filter(position == "QB") |> head(3)`
+
+Read this as: **"Take nfl, THEN filter to QBs only, THEN show the first 3 rows."**
+
+The pipe makes your code read like a recipe, and you'll use it in almost every data analysis going forward.
+
+**Keyboard shortcut**: Ctrl+Shift+M (Windows) / Cmd+Shift+M (MacOS)
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: `filter()` — Selecting Rows
+
+`filter()` keeps only the rows that match your conditions.
+
+```{r}
+# All Pro Bowl players
+nfl |> filter(pro_bowl == TRUE)
+```
+
+```{r}
+# All receivers (WR and TE) with more than 1,000 yards
+nfl |> filter(position %in% c("WR", "TE"), yards > 1000)
+```
+
+```{r}
+# AFC players with 10 or more touchdowns
+nfl |> filter(conference == "AFC", touchdowns >= 10)
+```
+
+::: callout-note
+## Useful `filter()` Operators
+
+| Operator | Meaning | Example |
+|----------|---------|---------|
+| `==` | Equal to | `position == "QB"` |
+| `!=` | Not equal to | `team != "KC"` |
+| `>`, `<`, `>=`, `<=` | Comparisons | `yards > 1000` |
+| `&` | AND (both must be true) | `yards > 1000 & touchdowns > 10` |
+| `\|` | OR (at least one true) | `position == "WR" \| position == "TE"` |
+| `%in%` | Matches any in a list | `team %in% c("KC", "PHI", "SF")` |
+| `is.na()` | Is missing | `is.na(yards)` |
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: `select()` — Choosing Columns
+
+`select()` lets you keep only the columns you need:
+
+```{r}
+# Just player name, position, and touchdowns
+nfl |> select(player, position, touchdowns)
+```
+
+```{r}
+# Remove a column using -
+nfl |> select(-pro_bowl) |> head(4)
+```
+
+```{r}
+# Select a range of columns
+nfl |> select(player:team) |> head(4)
+```
+
+```{r}
+# Reorder columns and drop the rest
+nfl |> select(player, team, position, yards, touchdowns) |> head(4)
+```
+
+------------------------------------------------------------------------
+
+## Part 6: `mutate()` — Creating New Columns
+
+`mutate()` adds new columns calculated from existing ones:
+
+```{r}
+# Yards per game
+nfl |>
+  mutate(yards_per_game = round(yards / games, 1)) |>
+  select(player, position, games, yards, yards_per_game) |>
+  head(8)
+```
+
+```{r}
+# Touchdowns per game AND a performance tier
+nfl |>
+  mutate(
+    td_per_game    = round(touchdowns / games, 2),
+    performance    = case_when(
+      touchdowns >= 30 ~ "Elite",
+      touchdowns >= 15 ~ "Pro-Bowl Level",
+      touchdowns >= 8  ~ "Solid Starter",
+      TRUE             ~ "Developing"
+    )
+  ) |>
+  select(player, position, touchdowns, td_per_game, performance) |>
+  arrange(desc(touchdowns))
+```
+
+::: callout-tip
+## `case_when()` — The Multi-Condition `ifelse()`
+`case_when()` is like a series of if-else statements. Each line is:
+`condition ~ value_to_assign`
+
+The last line (`TRUE ~ ...`) is the "else" — catches everything that didn't match.
+:::
+
+------------------------------------------------------------------------
+
+## Part 7: `arrange()` — Sorting
+
+```{r}
+# Sort by touchdowns, highest first
+nfl |>
+  select(player, position, touchdowns) |>
+  arrange(desc(touchdowns))
+```
+
+```{r}
+# Sort alphabetically by team, then by yards within each team
+nfl |>
+  select(player, team, yards) |>
+  arrange(team, desc(yards)) |>
+  head(10)
+```
+
+------------------------------------------------------------------------
+
+## Part 8: `summarize()` and `group_by()` — The Power Combo
+
+This is the most important dplyr pattern. `group_by()` splits the data into groups, and `summarize()` collapses each group into summary statistics.
+
+```{r}
+# Average yards and touchdowns by position
+nfl |>
+  group_by(position) |>
+  summarize(
+    n_players     = n(),
+    avg_yards     = round(mean(yards), 0),
+    avg_tds       = round(mean(touchdowns), 1),
+    total_tds     = sum(touchdowns),
+    pro_bowl_pct  = round(mean(pro_bowl) * 100, 1)
+  )
+```
+
+```{r}
+# Compare AFC vs NFC
+nfl |>
+  group_by(conference) |>
+  summarize(
+    players      = n(),
+    avg_yards    = round(mean(yards), 0),
+    avg_tds      = round(mean(touchdowns), 1),
+    pro_bowlers  = sum(pro_bowl)
+  )
+```
+
+```{r}
+# Top team by total touchdowns
+nfl |>
+  group_by(team) |>
+  summarize(team_tds = sum(touchdowns)) |>
+  arrange(desc(team_tds)) |>
+  head(8)
+```
+
+::: callout-note
+## Useful `summarize()` Functions
+
+| Function | What it does |
+|----------|-------------|
+| `n()` | Count rows in group |
+| `mean(x)` | Average |
+| `sum(x)` | Total |
+| `median(x)` | Middle value |
+| `sd(x)` | Standard deviation |
+| `min(x)`, `max(x)` | Smallest / largest |
+| `n_distinct(x)` | Count unique values |
+:::
+
+------------------------------------------------------------------------
+
+## Part 9: Chaining Everything Together
+
+The real power of dplyr is chaining multiple verbs into a readable pipeline:
+
+```{r}
+# Full analysis: Pro Bowl skill players in the AFC with 15+ TDs
+# Show their yards per game, sorted by performance
+
+nfl |>
+  filter(conference == "AFC",
+         pro_bowl == TRUE,
+         touchdowns >= 10) |>
+  mutate(ypg = round(yards / games, 1)) |>
+  select(player, team, position, touchdowns, ypg) |>
+  arrange(desc(touchdowns))
+```
+
+```{r}
+# Summary: Average stats for Pro Bowl vs Non-Pro Bowl players
+nfl |>
+  group_by(pro_bowl) |>
+  summarize(
+    count     = n(),
+    avg_yards = round(mean(yards)),
+    avg_tds   = round(mean(touchdowns), 1),
+    avg_games = round(mean(games), 1)
+  )
+```
+
+```{r}
+# Visualization: Touchdowns by position group
+pos_summary <- nfl |>
+  group_by(position) |>
+  summarize(avg_tds = mean(touchdowns))
+
+barplot(
+  pos_summary$avg_tds,
+  names.arg = pos_summary$position,
+  col       = c("#013369", "#D50A0A", "#1B912F", "#F0D60F"),
+  ylab      = "Average Touchdowns",
+  main      = "Average Touchdowns by Position\n2025–26 NFL Season",
+  border    = "white"
+)
+```
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** What does the pipe operator `|>` do?
+
+    a) Divides two numbers  b) Passes the result of one function into the next c) Creates a new column d) Filters rows
+
+**2.** Which dplyr verb would you use to keep only NFL players who scored more than 10 touchdowns?
+
+    a) `select()` b) `mutate()` c) `filter()` d) `arrange()`
+
+**3.** You want to add a new column `ypg` (yards per game) to your data frame. Which verb do you use, and write the code?
+
+**4.** What is the correct order for calculating average touchdowns per position?
+
+  a) `summarize()` then `group_by()`
+  b) `group_by()` then `summarize()`
+  c) `filter()` then `group_by()`
+  d) Order doesn't matter
+
+**5.** Inside `summarize()`, which function counts the number of rows in each group?
+
+  a) `count()`
+  b) `length()`
+  c) `n()`
+  d) `tally()`
+
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) Passes the result of one function into the next — The pipe `|>` takes whatever is on its left and feeds it as the first argument to the function on its right. It lets you chain steps together in a readable left-to-right sequence.
+
+**2.** c) `filter()` — `filter()` selects **rows** based on conditions. Example: `nfl |> filter(touchdowns > 10)`.
+
+**3.** `mutate()` — `nfl |> mutate(ypg = round(yards / games, 1))`. `mutate()` **creates or modifies columns** using expressions based on existing columns.
+
+**4.** b) `group_by()` then `summarize()` — You must tell R what groups to use **before** you calculate the summaries. `group_by(position) |> summarize(avg_td = mean(touchdowns))`.
+
+**5.** c) `n()` — Inside `summarize()`, `n()` counts the number of rows in each group. Note: `length()` also works on a column but `n()` is the idiomatic dplyr approach.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 9 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Load a package using `library()`
+- [ ] Use the pipe `|>` to chain operations
+- [ ] Filter rows using `filter()` with one and multiple conditions
+- [ ] Select specific columns using `select()`
+- [ ] Create new columns using `mutate()`
+- [ ] Sort data using `arrange()` (and `desc()` for descending)
+- [ ] Calculate group summaries using `group_by()` + `summarize()`
+- [ ] Chain multiple dplyr verbs together in a single pipeline
+
+::: callout-tip
+## Bonus Challenge
+Using the `nfl` dataset, find the top 5 players in **yards per game** (you'll need to create this column with `mutate()`). Then filter to only those who played at least 15 games. Show their name, team, position, and yards per game. Which position dominates the top 5?
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Monday, Week 5)
+
+- **Monday Sep 14** (Lab 10): Frequency Data & Confidence Intervals for Proportions
+- Read **Wilke 2021 Ch. 1, 2, 5, 7** (links on Canvas)
+- dplyr will be used in almost every lab from now on — get comfortable with the 6 verbs!
+
+::: callout-note
+## The 6 dplyr Verbs — Quick Reference
+
+| Verb | What it does | Key argument |
+|------|-------------|--------------|
+| `filter()` | Keep rows matching conditions | Logical expressions |
+| `select()` | Keep/drop columns | Column names |
+| `mutate()` | Add/change columns | `new_col = expression` |
+| `arrange()` | Sort rows | Column name(s), `desc()` |
+| `summarize()` | Collapse to summary stats | `stat = function(col)` |
+| `group_by()` | Split into groups before summarizing | Column to group by |
+:::
+
+------------------------------------------------------------------------

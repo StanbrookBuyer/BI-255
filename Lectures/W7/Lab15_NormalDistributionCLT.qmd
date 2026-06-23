@@ -1,0 +1,384 @@
+---
+title: "Lab 15: The Normal Distribution & the Central Limit Theorem"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "September 28, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## The Most Important Distribution in Statistics
+
+Biological measurements — enzyme reaction rates, cell sizes, body temperatures, blood glucose, leaf areas — tend to cluster around a central value with symmetric variation in both directions. This pattern is so pervasive that it has a name: the **normal distribution**. Understanding it is a prerequisite for almost every statistical test covered later in this course.
+
+Equally important is the **Central Limit Theorem**, which explains *why* the normal distribution matters so much even when the underlying data are not themselves normally distributed.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Describe the properties of the normal distribution
+2. Use `dnorm()`, `pnorm()`, `qnorm()`, and `rnorm()` in R
+3. Apply the 68-95-99.7 rule to biological problems
+4. Calculate and interpret z-scores
+5. State the Central Limit Theorem and demonstrate it by simulation
+6. Explain why the CLT underpins most parametric statistical tests
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Properties of the Normal Distribution
+
+The normal (Gaussian) distribution is defined by two parameters:
+
+- **μ (mu)** — the mean: where the distribution is centred
+- **σ (sigma)** — the standard deviation: how spread out it is
+
+::: callout-important
+## Key Properties of the Normal Distribution
+
+1. **Symmetric** — the left and right halves are mirror images
+2. **Unimodal** — one peak at the mean
+3. **Mean = Median = Mode** — all three are the same value
+4. **Asymptotic tails** — the curve never touches zero but extends infinitely in both directions
+5. **Total area = 1** — the area under the curve represents the total probability
+:::
+
+```{r}
+# Plot a standard normal distribution (mean = 0, SD = 1)
+x <- seq(-4, 4, length = 500)
+
+plot(x, dnorm(x, mean = 0, sd = 1),
+     type = "l", lwd = 2,
+     col  = "#2C5F8A",
+     xlab = "Standard Deviations from Mean (z)",
+     ylab = "Probability Density",
+     main = "Standard Normal Distribution N(0, 1)")
+
+# Shade the area within 1 SD of the mean
+x_1sd <- seq(-1, 1, length = 200)
+polygon(c(-1, x_1sd, 1), c(0, dnorm(x_1sd), 0),
+        col = "#2C5F8A40", border = NA)
+abline(v = c(-1, 0, 1), lty = c(2, 1, 2), col = c("grey", "#C8102E", "grey"))
+text(0, 0.15, "68%", col = "#1A3D5C", font = 2)
+```
+
+### The 68-95-99.7 Rule
+
+```{r}
+# Demonstrate the 68-95-99.7 rule numerically
+cat("Area within 1 SD:", round(pnorm(1) - pnorm(-1), 4), "\n")
+cat("Area within 2 SD:", round(pnorm(2) - pnorm(-2), 4), "\n")
+cat("Area within 3 SD:", round(pnorm(3) - pnorm(-3), 4), "\n")
+```
+
+```{r}
+# Visualise all three
+x <- seq(-4, 4, length = 500)
+plot(x, dnorm(x), type = "l", lwd = 2, col = "#2C5F8A",
+     xlab = "z", ylab = "Density",
+     main = "The 68-95-99.7 Rule")
+
+shade_region <- function(lo, hi, col) {
+  xs <- seq(lo, hi, length = 200)
+  polygon(c(lo, xs, hi), c(0, dnorm(xs), 0), col = col, border = NA)
+}
+
+shade_region(-3, 3, "#1A3D5C30")
+shade_region(-2, 2, "#2C5F8A50")
+shade_region(-1, 1, "#5B8DB880")
+
+legend("topright",
+       legend = c("±1 SD (68%)", "±2 SD (95%)", "±3 SD (99.7%)"),
+       fill   = c("#5B8DB880", "#2C5F8A50", "#1A3D5C30"),
+       bty    = "n")
+```
+
+------------------------------------------------------------------------
+
+## Part 2: Working with the Normal Distribution in R
+
+R provides four functions for the normal distribution. They all start with a letter that indicates what they compute:
+
+::: callout-note
+## The Four Normal Distribution Functions
+
+| Function | What it computes | Input |
+|----------|-----------------|-------|
+| `dnorm(x)` | **Density** at x (height of the curve) | x value |
+| `pnorm(q)` | **Probability** ≤ q (area to the left) | quantile |
+| `qnorm(p)` | **Quantile** for probability p | probability |
+| `rnorm(n)` | **Random** sample of n values | sample size |
+
+This pattern (d, p, q, r) applies to every distribution in R: `dpois/ppois/qpois/rpois`, `dt/pt/qt/rt`, etc.
+:::
+
+### Biological Example: Haemoglobin Concentration
+
+Adult haemoglobin (Hgb) concentration in healthy males follows approximately N(μ = 15.5, σ = 1.2) g/dL.
+
+```{r}
+mu_hgb <- 15.5
+sd_hgb <- 1.2
+```
+
+```{r}
+# What is the probability that a randomly selected male has Hgb < 13.5 g/dL (anaemia threshold)?
+pnorm(13.5, mean = mu_hgb, sd = sd_hgb)
+```
+
+```{r}
+# What Hgb value separates the lowest 5% of the population?
+qnorm(0.05, mean = mu_hgb, sd = sd_hgb)
+```
+
+```{r}
+# What fraction of males have Hgb between 14 and 17?
+pnorm(17, mu_hgb, sd_hgb) - pnorm(14, mu_hgb, sd_hgb)
+```
+
+```{r}
+# Visualise the Hgb distribution with clinical thresholds marked
+x_hgb <- seq(11, 20, length = 400)
+
+plot(x_hgb, dnorm(x_hgb, mu_hgb, sd_hgb),
+     type = "l", lwd = 2, col = "#2C5F8A",
+     xlab = "Haemoglobin Concentration (g/dL)",
+     ylab = "Probability Density",
+     main = "Haemoglobin Distribution in Healthy Adult Males\nN(15.5, 1.2)")
+
+# Shade anaemia region
+x_shade <- seq(11, 13.5, length = 200)
+polygon(c(11, x_shade, 13.5), c(0, dnorm(x_shade, mu_hgb, sd_hgb), 0),
+        col = "#C8102E50", border = NA)
+abline(v = 13.5, col = "#C8102E", lty = 2, lwd = 2)
+text(13.0, 0.25, "Anaemia\nthreshold\n(13.5)", col = "#C8102E", cex = 0.8, adj = 1)
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Z-scores
+
+A **z-score** transforms a raw measurement into the number of standard deviations it lies from the mean:
+
+z = (x − μ) / σ
+
+```{r}
+# A patient has Hgb = 13.0 g/dL. What is their z-score?
+x_patient <- 13.0
+z_score <- (x_patient - mu_hgb) / sd_hgb
+cat("Z-score:", round(z_score, 3), "\n")
+cat("This patient is", abs(round(z_score, 2)), "standard deviations below the mean.\n")
+```
+
+```{r}
+# Z-scores allow comparison across different scales
+# E.g.: which is more unusual — Hgb of 13.0 or a fasting glucose of 60 mg/dL?
+# (Fasting glucose in healthy adults: mean = 90, SD = 10 mg/dL)
+
+z_hgb      <- (13.0  - 15.5) / 1.2
+z_glucose  <- (60    - 90)   / 10
+
+cat("Hgb z-score:      ", round(z_hgb, 2), "\n")
+cat("Glucose z-score:  ", round(z_glucose, 2), "\n")
+cat("Glucose is more unusual (further from mean in SD units)\n")
+```
+
+------------------------------------------------------------------------
+
+## Part 4: The Central Limit Theorem
+
+The Central Limit Theorem (CLT) is one of the most important results in all of statistics.
+
+::: callout-important
+## The Central Limit Theorem (CLT)
+
+If you take repeated random samples of size n from **any** population (regardless of its shape), the distribution of the **sample means** will approach a normal distribution as n increases.
+
+The distribution of sample means has:
+- Mean = μ (the population mean)
+- Standard deviation = σ / √n (called the **standard error of the mean**)
+
+This is why the normal distribution appears so often in statistics — even non-normal data produces normally distributed means for large enough samples.
+:::
+
+### Demonstrating the CLT by Simulation
+
+Let us start with a **highly non-normal** distribution — the exponential distribution, which is strongly right-skewed (like species abundances or time between rare events):
+
+```{r}
+set.seed(42)
+pop_size <- 100000
+
+# Create a right-skewed population (exponential distribution)
+population <- rexp(pop_size, rate = 0.2)   # Mean = 1/rate = 5
+
+par(mfrow = c(1, 2))
+
+hist(population[1:500],
+     col    = "#2C5F8A", border = "white",
+     xlab   = "Value",
+     main   = "Population Distribution\n(Exponential, right-skewed)",
+     breaks = 30)
+
+# Draw 5000 samples of size 30 and record the sample mean each time
+sample_means_30 <- replicate(5000, mean(sample(population, 30)))
+
+hist(sample_means_30,
+     col    = "#C8102E60", border = "white",
+     xlab   = "Sample Mean",
+     main   = "Distribution of Sample Means\n(n = 30, 5000 samples)")
+curve(dnorm(x, mean(sample_means_30), sd(sample_means_30)) * 5000 * diff(range(sample_means_30)) / 30,
+      add = TRUE, col = "#1A3D5C", lwd = 2)
+
+par(mfrow = c(1, 1))
+```
+
+```{r}
+# Effect of sample size on normality of the sampling distribution
+par(mfrow = c(1, 3))
+for (n in c(5, 15, 50)) {
+  sm <- replicate(5000, mean(sample(population, n)))
+  hist(sm,
+       col    = "#2C5F8A60", border = "white",
+       main   = paste0("n = ", n),
+       xlab   = "Sample Mean",
+       breaks = 25)
+}
+par(mfrow = c(1, 1))
+```
+
+::: callout-note
+## What the CLT Means for You
+
+By n = 30, the distribution of sample means is approximately normal even though the original data are exponential. This is why:
+
+- **t-tests work** even when your raw data are not perfectly normal (for n ≥ 20–30)
+- **Means and confidence intervals** are valid summaries for most biological data
+- **The standard error (SE = SD / √n)** decreases with sample size — more samples give a more precise estimate of the true mean
+
+The CLT is the mathematical justification for almost every parametric test you will use in biology.
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: Standard Error vs Standard Deviation
+
+```{r}
+# Demonstrate how SE decreases with n
+set.seed(99)
+ns      <- c(5, 10, 20, 50, 100, 200)
+results <- sapply(ns, function(n) {
+  sample_means <- replicate(2000, mean(rnorm(n, mean = 15.5, sd = 1.2)))
+  c(SD_of_means = sd(sample_means),
+    Theoretical_SE = 1.2 / sqrt(n))
+})
+
+colnames(results) <- ns
+round(results, 4)
+```
+
+```{r}
+plot(ns, results["SD_of_means", ],
+     type = "b", pch = 16, col = "#2C5F8A",
+     xlab = "Sample Size (n)",
+     ylab = "Standard Error of the Mean",
+     main = "SE Decreases with Sample Size\n(Haemoglobin example, sigma = 1.2)")
+lines(ns, results["Theoretical_SE", ],
+      col = "#C8102E", lty = 2, lwd = 2)
+legend("topright",
+       legend = c("Simulated SE", "Theoretical SE = sigma/sqrt(n)"),
+       col    = c("#2C5F8A", "#C8102E"),
+       lty    = c(1, 2), pch = c(16, NA))
+```
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** Blood pressure in a healthy adult population is approximately N(120, 15) mmHg. What R function and arguments give you the probability of a randomly selected person having blood pressure below 100?
+
+**2.** Using the same distribution, what blood pressure value separates the **highest 10%** of the population from the rest?
+
+**3.** A cell culture experiment measures protein yield. One sample gives 42 mg/L in a population with mean 50 mg/L and SD 8 mg/L. What is the z-score for this sample?
+
+    a) −0.9    b) −1.0    c) +1.0    d) +0.9
+
+**4.** The Central Limit Theorem states that the distribution of sample means will be approximately normal when:
+
+    a) The original population is normally distributed    b) Sample size is sufficiently large, regardless of population shape    c) The variance is small    d) All observations are independent
+
+**5.** True or False: The standard error of the mean equals the sample standard deviation divided by the square root of the sample size.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** `pnorm(100, mean = 120, sd = 15)` — `pnorm` gives the probability of a value at or below q. Here q = 100, mean = 120, sd = 15. The answer is approximately 0.091 (about 9.1% of healthy adults have BP below 100).
+
+**2.** `qnorm(0.90, mean = 120, sd = 15)` — `qnorm` gives the value at a given cumulative probability. The 90th percentile gives the value above which the top 10% lie. Answer ≈ 139.2 mmHg.
+
+**3.** b) −1.0 — z = (42 − 50) / 8 = −8 / 8 = −1.0. This sample is exactly one standard deviation below the mean.
+
+**4.** b) Sample size is sufficiently large, regardless of population shape — this is the essence of the CLT. The population can be skewed, bimodal, or any shape. For n ≥ 30, the sampling distribution of the mean is approximately normal.
+
+**5.** **True** — SE = SD / √n. This is both the theoretical result from the CLT and what you observe empirically when you simulate repeated sampling. As n grows, SE shrinks, making your estimate of the mean more precise.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 15 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Describe the shape and parameters of the normal distribution
+- [ ] Apply the 68-95-99.7 rule to a biological example
+- [ ] Use `pnorm()` to find tail probabilities (what fraction of values fall below a threshold?)
+- [ ] Use `qnorm()` to find critical values (what value corresponds to a given probability?)
+- [ ] Calculate a z-score and explain what it represents
+- [ ] State the Central Limit Theorem in plain language
+- [ ] Demonstrate the CLT by simulation using `replicate()` and `sample()`
+- [ ] Explain the difference between SD (spread of data) and SE (precision of the mean)
+
+::: callout-tip
+## Bonus Challenge
+
+The serum ferritin concentration in adult women follows a right-skewed distribution (not normal) with mean 45 ng/mL and SD 35 ng/mL. Simulate a population of 50,000 values using `rlnorm()` (a log-normal distribution is a good approximation). Then demonstrate the CLT by drawing 3,000 samples of size 40 and plotting the distribution of sample means. Does the result look normal? Calculate the theoretical SE and compare it to the standard deviation of your sample means.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Wednesday)
+
+- Wednesday (Lab 16): Assessing normality formally — QQ plots, Shapiro-Wilk test, and what to do when data are not normal
+- Read **R for Data Science Ch. 9–10**
+- Quiz 4 is this Friday (Lab 15 and 16 content)
+
+------------------------------------------------------------------------

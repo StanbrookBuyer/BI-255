@@ -1,0 +1,379 @@
+---
+title: "Lab 8: Hypothesis Testing & the Null Hypothesis"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "September 9, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Does Home Court Really Matter? Testing Hypotheses with NBA Data
+
+Sports fans argue constantly: *"Does home court advantage actually exist, or is it a myth?"* Scientists ask the same kinds of questions all the time: *"Does this drug work better than a placebo? Do birds in urban areas have different stress hormones than rural birds?"*
+
+The way scientists answer these questions rigorously — rather than just guessing — is through **hypothesis testing**. Today we learn what a hypothesis test is, what a p-value means, and how to run your first statistical test in R.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Explain what a null hypothesis (H₀) and alternative hypothesis (H₁) are
+2. Describe what a p-value represents in plain language
+3. Know when to reject the null hypothesis (p < 0.05)
+4. Run a one-sample t-test using `t.test()`
+5. Run a two-sample t-test to compare two groups
+6. Interpret the output of `t.test()` correctly
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: The Logic of Hypothesis Testing
+
+### The Question
+
+Imagine you suspect that NBA teams score more points at home than away. You collect data from 30 home games and 30 away games. You could just compare the averages... but what if the difference is just **due to random chance?**
+
+Hypothesis testing is the formal process of deciding whether an observed difference is **real** or just **random noise**.
+
+### The Two Hypotheses
+
+Every statistical test starts with two competing claims:
+
+::: callout-important
+## The Two Hypotheses
+
+**Null Hypothesis (H₀)** — "Nothing is happening / There is no difference"
+
+For our example: *"Home teams score the same number of points as away teams."*
+
+**Alternative Hypothesis (H₁)** — "Something IS happening / There IS a difference"
+
+For our example: *"Home teams score MORE points than away teams."*
+
+We always start by **assuming the null hypothesis is true** and then look for evidence strong enough to reject it.
+:::
+
+### The p-value: What Does it Mean?
+
+The **p-value** is the probability of getting results as extreme as yours **if the null hypothesis were actually true**.
+
+Think of it this way: you flip a coin 10 times and get 9 heads. Is the coin unfair? The p-value tells you: *"If the coin were fair, how likely is it to get 9 or more heads by pure luck?"*
+
+- **Small p-value (< 0.05)** → Your result is very unlikely by chance → **Reject H₀** → Something real is happening
+- **Large p-value (≥ 0.05)** → Your result could easily happen by chance → **Fail to reject H₀** → Insufficient evidence
+
+::: callout-warning
+## ️ What p < 0.05 Does NOT Mean
+- It does NOT mean "the probability that H₀ is true is 5%"
+- It does NOT mean the result is definitely real or important
+- It does NOT mean we "proved" our hypothesis
+
+The p < 0.05 threshold is a convention, not a law. We are just saying: "This is unlikely enough by chance that we're willing to act as if H₀ is wrong."
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: Simulating the Concept
+
+Before running a real test, let's visualize what "random variation" looks like to understand why we need a test at all:
+
+```{r}
+# Set seed for reproducibility
+set.seed(42)
+
+# Simulate 30 home game scores (mean 112, some variation)
+home_scores <- round(rnorm(30, mean = 112, sd = 10))
+
+# Simulate 30 away game scores (mean 107, same variation)
+away_scores <- round(rnorm(30, mean = 107, sd = 10))
+
+cat("Home games - Mean:", round(mean(home_scores), 1),
+    "| SD:", round(sd(home_scores), 1), "\n")
+cat("Away games - Mean:", round(mean(away_scores), 1),
+    "| SD:", round(sd(away_scores), 1), "\n")
+```
+
+```{r}
+# Visualize the overlap
+par(mfrow = c(1, 1))
+boxplot(home_scores, away_scores,
+        names   = c("Home Games", "Away Games"),
+        col     = c("#1D428A", "#C8102E"),
+        ylab    = "Points Scored",
+        main    = "NBA Home vs Away Scoring\n(30-game sample, simulated)",
+        outline = FALSE)
+stripchart(list(home_scores, away_scores),
+           method  = "jitter",
+           vertical = TRUE,
+           add     = TRUE,
+           pch     = 16,
+           col     = c("#1D428A80", "#C8102E80"),
+           cex     = 0.8)
+```
+
+::: callout-note
+## Why Can't We Just Compare Averages?
+Notice there's a lot of **overlap** between the two groups. Even though the averages are different, many individual home games score lower than many away games.
+
+A hypothesis test asks: *"Given all this overlap and variability, is the average difference big enough to be convincing — or could random chance explain it?"*
+:::
+
+------------------------------------------------------------------------
+
+## Part 3: The One-Sample t-test
+
+A **one-sample t-test** asks: *"Is the mean of my group different from a specific value?"*
+
+Example: The NBA league average for points per game is 114. Did our home team score significantly different from the league average?
+
+```{r}
+# Hypothesis:
+# H₀: The home team's average PPG = 114 (league average)
+# H₁: The home team's average PPG ≠ 114
+
+t.test(home_scores, mu = 114)
+```
+
+### Reading the Output
+
+Let's break down what `t.test()` returns:
+
+::: callout-note
+## Interpreting `t.test()` Output
+
+```
+t = -0.55, df = 29, p-value = 0.585
+alternative hypothesis: true mean is not equal to 114
+95 percent confidence interval: 108.3  115.8
+sample estimates: mean of x = 112.0
+```
+
+| Part | What it means |
+|------|--------------|
+| **t** | The test statistic — how many standard errors away from H₀ |
+| **df** | Degrees of freedom (roughly = sample size - 1) |
+| **p-value** | Probability of this result if H₀ were true |
+| **95% CI** | Range we're 95% confident contains the true mean |
+| **mean of x** | The actual average in your data |
+
+**Decision**: p = 0.585 > 0.05 → **Fail to reject H₀**. No significant difference from league average.
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: The Two-Sample t-test
+
+A **two-sample t-test** compares the means of **two groups**. This is the most common test in biology.
+
+Example: Do home teams score significantly more than away teams?
+
+```{r}
+# H₀: Mean home score = Mean away score (no home court advantage)
+# H₁: Mean home score > Mean away score (home court advantage exists)
+
+result <- t.test(home_scores, away_scores,
+                 alternative = "greater")   # One-tailed: we predict home > away
+result
+```
+
+```{r}
+# Extract just the p-value
+result$p.value
+```
+
+```{r}
+# Extract the confidence interval
+result$conf.int
+```
+
+::: callout-tip
+## One-tailed vs Two-tailed Tests
+
+| Test Type | When to Use | Code |
+|-----------|------------|------|
+| Two-tailed | You predict a difference but not the direction | `alternative = "two.sided"` (default) |
+| One-tailed (greater) | You predict group 1 > group 2 | `alternative = "greater"` |
+| One-tailed (less) | You predict group 1 < group 2 | `alternative = "less"` |
+
+**Use two-tailed unless you have a strong prior reason to predict direction.**
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: Real NBA Home Court Data
+
+Let's use real-ish data from a full NBA season to test home court advantage properly:
+
+```{r}
+# Real NBA season data (2024-25 season averages, by location)
+# Source: Basketball Reference (approximate values)
+set.seed(7)
+
+# Home game scores across all 30 NBA teams (one average per team)
+home_avg <- c(115.2, 112.8, 118.4, 110.1, 114.7, 119.2, 111.3, 116.5,
+               113.9, 117.1, 114.4, 109.8, 120.1, 115.7, 112.2, 118.8,
+               111.9, 116.2, 114.1, 113.5, 117.9, 110.5, 115.8, 112.4,
+               118.3, 114.0, 116.7, 113.1, 119.5, 115.3)
+
+away_avg <- c(111.3, 109.1, 113.2, 107.4, 110.8, 114.5, 108.7, 112.1,
+               110.2, 112.8, 110.9, 106.3, 115.4, 111.2, 108.9, 113.7,
+               108.1, 111.5, 109.8, 109.1, 113.2, 107.0, 111.1, 108.8,
+               114.0, 110.3, 112.0, 109.5, 114.9, 111.6)
+
+cat("League home average:", round(mean(home_avg), 2), "PPG\n")
+cat("League away average:", round(mean(away_avg), 2), "PPG\n")
+cat("Difference:", round(mean(home_avg) - mean(away_avg), 2), "PPG\n")
+```
+
+```{r}
+# Run the paired t-test (same teams, comparing home vs away)
+# Paired because each team contributes one value to each group
+home_court_test <- t.test(home_avg, away_avg, paired = TRUE,
+                           alternative = "greater")
+home_court_test
+```
+
+```{r}
+# Visualize
+difference <- home_avg - away_avg
+
+hist(difference,
+     col    = "#1D428A",
+     border = "white",
+     xlab   = "Home Score − Away Score (PPG)",
+     main   = "NBA Home Court Advantage\nDistribution of Score Differences by Team",
+     breaks = 8)
+abline(v = 0,                  col = "red",    lwd = 2, lty = 2)
+abline(v = mean(difference),   col = "#FFC72C", lwd = 2)
+legend("topright",
+       legend = c("No difference (H₀)", "Observed mean"),
+       col    = c("red", "#FFC72C"),
+       lty    = c(2, 1), lwd = 2)
+```
+
+::: callout-tip
+## Interpreting These Results
+- The mean home-court advantage is about **4 PPG**
+- The p-value should be very small (p << 0.05)
+- **Conclusion**: We have strong statistical evidence that home teams score significantly more points than away teams → Reject H₀ → Home court advantage is real!
+:::
+
+------------------------------------------------------------------------
+
+## Part 6: Hypothesis Testing Decision Framework
+
+Use this framework every time you run a test:
+
+```{r, echo=FALSE}
+cat("
+HYPOTHESIS TESTING CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step 1: State your hypotheses
+   H₀: [what you assume by default — usually 'no difference']
+   H₁: [what you're testing for]
+
+Step 2: Choose your significance level
+   α = 0.05 (standard in biology)
+
+Step 3: Run the appropriate test
+   t.test(), chisq.test(), etc.
+
+Step 4: Look at the p-value
+   p < 0.05 → Reject H₀ → Evidence for H₁
+   p ≥ 0.05 → Fail to reject H₀ → Insufficient evidence
+
+Step 5: State your conclusion in plain English
+   'There is [significant / no significant] evidence that...'
+")
+```
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** The null hypothesis (H₀) always states that:
+
+    a) Your experiment worked  &nbsp;&nbsp; b) There is a significant difference  &nbsp;&nbsp; c) There is no effect or no difference  &nbsp;&nbsp; d) The p-value is less than 0.05
+
+**2.** You run a t-test and get p = 0.03. What do you conclude (use α = 0.05)?
+
+    a) Fail to reject H₀  &nbsp;&nbsp; b) Reject H₀  &nbsp;&nbsp; c) Accept H₀  &nbsp;&nbsp; d) The test is inconclusive
+
+**3.** In plain English, what does a p-value of 0.04 mean?
+
+**4.** You want to test whether a basketball team's home average (112 PPG) is significantly different from the league average of 114 PPG. Write the R code to run this test.
+
+**5.** True or False: A small p-value proves that your alternative hypothesis is definitely true.
+
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** c) There is no effect or no difference — The null hypothesis is always the "boring" default assumption: nothing is happening, there's no difference, the treatment doesn't work.
+
+**2.** b) Reject H₀ — Since p = 0.03 < 0.05 (our threshold α), the result is statistically significant and we reject the null hypothesis. We have enough evidence that something real is happening.
+
+**3.** A p-value of 0.04 means: *"If the null hypothesis were true, there would only be a 4% chance of getting results as extreme as these just by random chance."* Since 4% is below our 5% threshold, we consider this sufficient evidence to reject H₀.
+
+**4.** `t.test(home_scores, mu = 114)` — This is a **one-sample t-test** comparing the observed data to a known value (114, the league average). The `mu` argument specifies the value to test against.
+
+**5.** **False** — A small p-value means the result is *unlikely* if H₀ were true. It does **not** prove H₁ is true. Statistical significance is not proof — it's evidence. There's always a small chance of a false positive (Type I error).
+:::
+
+------------------------------------------------------------------------
+
+## Lab 8 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] State what H₀ and H₁ mean and give an example of each
+- [ ] Explain what a p-value represents in plain English
+- [ ] Know that p < 0.05 is the standard threshold for rejecting H₀
+- [ ] Run a one-sample t-test with `t.test(x, mu = value)`
+- [ ] Run a two-sample t-test with `t.test(x, y)`
+- [ ] Run a paired t-test with `t.test(x, y, paired = TRUE)`
+- [ ] Extract and interpret p-value, confidence interval, and test statistic from output
+- [ ] State a conclusion in plain English based on the result
+
+::: callout-tip
+## Bonus Challenge
+The NBA league average for three-point attempts per game is 35.1. Using a dataset of your favorite team's last 20 games (look up the stats or make realistic values), test whether they attempt significantly more or fewer three-pointers than league average. State H₀ and H₁, run the test, and write a one-sentence conclusion.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Friday)
+
+- Friday (Lab 9): **dplyr** — the tidyverse's toolkit for wrangling data frames
+- Read **Intro2r Ch. 4**
+- Practice: explain the p-value concept to someone who has never heard of it. If you can explain it, you understand it.
+
+------------------------------------------------------------------------

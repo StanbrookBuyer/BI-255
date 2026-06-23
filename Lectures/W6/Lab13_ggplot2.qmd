@@ -1,0 +1,417 @@
+---
+title: "Lab 13: ggplot2 — Improving Graphs & Saving Plots"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "September 23, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Publication-Quality Graphics with ggplot2
+
+The base R graphics system we used in Lab 12 is powerful but requires a lot of manual customisation. The `ggplot2` package takes a fundamentally different approach — it implements a **grammar of graphics**, a consistent set of rules for how plots are built from components. Once you understand the grammar, you can build almost any plot by combining the same small set of building blocks.
+
+`ggplot2` is the standard for data visualisation in ecology, genomics, clinical research, and most areas of biological data science. Nearly every figure you see in modern biology journals was made with it or something equivalent.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Explain the grammar of graphics: data, aesthetics, and geoms
+2. Build `geom_histogram()`, `geom_bar()`, `geom_boxplot()`, and `geom_point()` plots
+3. Map variables to colour, shape, and size with `aes()`
+4. Apply and customise themes
+5. Use `facet_wrap()` to create small-multiple plots
+6. Save publication-quality figures with `ggsave()`
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: The Grammar of Graphics
+
+Every ggplot2 figure is built from three required components:
+
+::: callout-important
+## The Three Layers of Every ggplot
+
+**1. Data** — the data frame you are plotting
+`ggplot(data = my_data, ...)`
+
+**2. Aesthetics** — which columns map to which visual properties
+`aes(x = col1, y = col2, colour = col3, ...)`
+
+**3. Geom** — the geometric shape used to represent the data
+`geom_point()`, `geom_boxplot()`, `geom_histogram()`, etc.
+
+A minimal plot: `ggplot(data, aes(x = col)) + geom_histogram()`
+
+Additional layers (themes, scales, labels, facets) are added with `+`.
+:::
+
+```{r}
+library(ggplot2)
+```
+
+### Dataset: Gene Expression in Two Cell Lines
+
+We will work with a simulated RNA-seq-style dataset comparing gene expression levels across two cell lines (wildtype and a knockout) under two treatment conditions:
+
+```{r}
+set.seed(303)
+n_per_group <- 10
+
+gene_expr <- data.frame(
+  gene        = paste0("Gene_", sprintf("%02d", rep(1:n_per_group, 6))),
+  cell_line   = rep(c("Wildtype", "Knockout"), each = 3 * n_per_group),
+  treatment   = rep(rep(c("Control", "Drug_A", "Drug_B"), each = n_per_group), times = 2),
+  expression  = c(
+    rnorm(n_per_group, mean = 8.2,  sd = 1.8),   # Wildtype control
+    rnorm(n_per_group, mean = 11.4, sd = 2.1),   # Wildtype Drug A
+    rnorm(n_per_group, mean = 7.9,  sd = 1.6),   # Wildtype Drug B
+    rnorm(n_per_group, mean = 5.8,  sd = 1.5),   # Knockout control
+    rnorm(n_per_group, mean = 6.3,  sd = 1.7),   # Knockout Drug A
+    rnorm(n_per_group, mean = 5.6,  sd = 1.4)    # Knockout Drug B
+  ),
+  log2_fc     = c(
+    rnorm(n_per_group, mean =  0.2, sd = 0.8),
+    rnorm(n_per_group, mean =  1.8, sd = 0.9),
+    rnorm(n_per_group, mean = -0.3, sd = 0.7),
+    rnorm(n_per_group, mean = -1.1, sd = 0.8),
+    rnorm(n_per_group, mean = -0.8, sd = 0.9),
+    rnorm(n_per_group, mean = -1.3, sd = 0.7)
+  )
+)
+
+str(gene_expr)
+```
+
+------------------------------------------------------------------------
+
+## Part 2: Histograms with `geom_histogram()`
+
+```{r}
+# Basic histogram
+ggplot(gene_expr, aes(x = expression)) +
+  geom_histogram(bins = 15, fill = "#2C5F8A", colour = "white") +
+  labs(title = "Distribution of Gene Expression Values",
+       x     = "Expression Level (log2 CPM)",
+       y     = "Count")
+```
+
+### Colour by Group
+
+```{r}
+# Separate histograms by cell line, overlaid
+ggplot(gene_expr, aes(x = expression, fill = cell_line)) +
+  geom_histogram(bins = 12, alpha = 0.6, position = "identity",
+                 colour = "white") +
+  scale_fill_manual(values = c("Wildtype" = "#2C5F8A",
+                               "Knockout" = "#C8102E")) +
+  labs(title = "Expression Distribution by Cell Line",
+       x     = "Expression Level (log2 CPM)",
+       y     = "Count",
+       fill  = "Cell Line") +
+  theme_classic()
+```
+
+::: callout-note
+## Key `aes()` Mappings
+
+| Mapping | What it controls |
+|---------|-----------------|
+| `x` | Position on x-axis |
+| `y` | Position on y-axis |
+| `colour` | Outline/line colour |
+| `fill` | Fill colour (inside bars, boxes, etc.) |
+| `shape` | Point shape (for `geom_point`) |
+| `size` | Point or line size |
+| `alpha` | Transparency (0 = invisible, 1 = opaque) |
+
+These can be **mapped to a variable** inside `aes()`, or **set to a fixed value** outside `aes()`.
+:::
+
+------------------------------------------------------------------------
+
+## Part 3: Bar Charts with `geom_bar()` and `geom_col()`
+
+```{r}
+# Mean expression per treatment — first summarise the data
+library(dplyr)
+
+summary_expr <- gene_expr |>
+  group_by(treatment, cell_line) |>
+  summarise(mean_expr = mean(expression),
+            se_expr   = sd(expression) / sqrt(n()),
+            .groups   = "drop")
+
+summary_expr
+```
+
+```{r}
+# Grouped bar chart using geom_col() (for pre-computed values)
+ggplot(summary_expr, aes(x = treatment, y = mean_expr, fill = cell_line)) +
+  geom_col(position = "dodge", width = 0.7) +
+  geom_errorbar(aes(ymin = mean_expr - se_expr,
+                    ymax = mean_expr + se_expr),
+                position = position_dodge(0.7),
+                width    = 0.2) +
+  scale_fill_manual(values = c("Wildtype" = "#2C5F8A",
+                               "Knockout" = "#C8102E")) +
+  labs(title = "Mean Gene Expression by Treatment and Cell Line",
+       x     = "Treatment",
+       y     = "Mean Expression (log2 CPM) ± SE",
+       fill  = "Cell Line") +
+  theme_classic(base_size = 13)
+```
+
+::: callout-tip
+## `geom_bar()` vs `geom_col()`
+
+`geom_bar()` counts rows and plots the count — use it when your data is unaggregated.
+
+`geom_col()` uses values already in your data frame — use it when you have pre-computed means or totals.
+
+For scientific figures, you almost always want `geom_col()` with a summary data frame.
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: Box Plots with `geom_boxplot()`
+
+```{r}
+# Box plot comparing expression across treatments, split by cell line
+ggplot(gene_expr, aes(x = treatment, y = expression, fill = cell_line)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(aes(colour = cell_line),
+              position = position_jitterdodge(jitter.width = 0.15),
+              size     = 1.5, alpha = 0.6) +
+  scale_fill_manual(values = c("Wildtype"  = "#2C5F8A",
+                               "Knockout"  = "#C8102E")) +
+  scale_colour_manual(values = c("Wildtype" = "#1A3D5C",
+                                 "Knockout" = "#8B0000")) +
+  labs(title  = "Gene Expression Distribution by Treatment",
+       x      = "Treatment",
+       y      = "Expression Level (log2 CPM)",
+       fill   = "Cell Line",
+       colour = "Cell Line") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "top")
+```
+
+------------------------------------------------------------------------
+
+## Part 5: Scatter Plots with `geom_point()`
+
+```{r}
+# Scatter plot: expression level vs log2 fold change
+ggplot(gene_expr, aes(x = expression, y = log2_fc,
+                      colour = cell_line, shape = treatment)) +
+  geom_point(size = 2.5, alpha = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
+  scale_colour_manual(values = c("Wildtype" = "#2C5F8A",
+                                 "Knockout" = "#C8102E")) +
+  labs(title  = "Expression Level vs Log2 Fold Change",
+       x      = "Baseline Expression (log2 CPM)",
+       y      = "Log2 Fold Change vs Control",
+       colour = "Cell Line",
+       shape  = "Treatment") +
+  theme_bw(base_size = 13)
+```
+
+::: callout-note
+## Why Log2 Fold Change?
+
+In genomics, fold change (FC) tells you how much a gene's expression changed between conditions. Log2 FC is the standard because:
+- Log2 FC = 1 means expression **doubled**
+- Log2 FC = -1 means expression **halved**
+- Log2 FC = 0 means **no change**
+
+This symmetric scale makes gains and losses directly comparable.
+:::
+
+------------------------------------------------------------------------
+
+## Part 6: Faceting — Small Multiples
+
+Faceting creates separate panels for each level of a variable. This is one of ggplot2's most powerful features.
+
+```{r}
+# One panel per treatment
+ggplot(gene_expr, aes(x = expression, fill = cell_line)) +
+  geom_histogram(bins = 10, alpha = 0.7, position = "identity",
+                 colour = "white") +
+  facet_wrap(~ treatment, ncol = 3) +
+  scale_fill_manual(values = c("Wildtype" = "#2C5F8A",
+                               "Knockout" = "#C8102E")) +
+  labs(title = "Expression Distribution by Treatment",
+       x     = "Expression (log2 CPM)",
+       y     = "Count",
+       fill  = "Cell Line") +
+  theme_bw(base_size = 12) +
+  theme(strip.background = element_rect(fill = "#E8EEF4"))
+```
+
+------------------------------------------------------------------------
+
+## Part 7: Themes and Saving Plots
+
+### Themes
+
+```{r}
+# The same plot with different themes
+p <- ggplot(gene_expr, aes(x = treatment, y = expression, fill = cell_line)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = c("Wildtype" = "#2C5F8A", "Knockout" = "#C8102E")) +
+  labs(x = "Treatment", y = "Expression (log2 CPM)", fill = "Cell Line")
+
+p + theme_classic()    # Clean, publication-style
+```
+
+::: callout-tip
+## Common ggplot2 Themes
+
+| Theme | Style |
+|-------|-------|
+| `theme_classic()` | Clean axes, no grid — good for papers |
+| `theme_bw()` | White background with grid lines |
+| `theme_minimal()` | Minimal background, subtle grid |
+| `theme_void()` | Empty — useful for maps and diagrams |
+
+`theme_classic()` or `theme_bw()` are the most commonly required for journal submission.
+:::
+
+### Saving with `ggsave()`
+
+```{r}
+# Build a final figure
+final_plot <- ggplot(gene_expr, aes(x = treatment, y = expression,
+                                     fill = cell_line)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(aes(colour = cell_line),
+              position = position_jitterdodge(0.15),
+              size = 1.2, alpha = 0.5) +
+  scale_fill_manual(values = c("Wildtype" = "#2C5F8A",
+                               "Knockout" = "#C8102E")) +
+  scale_colour_manual(values = c("Wildtype" = "#1A3D5C",
+                                 "Knockout" = "#8B0000")) +
+  labs(title  = "Gene Expression Across Treatments",
+       x      = "Treatment",
+       y      = "Expression Level (log2 CPM)",
+       fill   = "Cell Line",
+       colour = "Cell Line") +
+  theme_classic(base_size = 13) +
+  theme(legend.position = "top",
+        plot.title      = element_text(face = "bold"))
+
+# Save to file
+ggsave(filename = "gene_expression_boxplot.png",
+       plot     = final_plot,
+       width    = 7,
+       height   = 5,
+       dpi      = 300)
+
+cat("Plot saved. Check your Files panel in Posit Cloud.\n")
+```
+
+::: callout-important
+## `ggsave()` Arguments
+
+| Argument | What it does |
+|----------|-------------|
+| `filename` | Output file name; extension sets format (.png, .pdf, .svg) |
+| `plot` | The ggplot object to save (defaults to last plot shown) |
+| `width`, `height` | Figure dimensions in inches |
+| `dpi` | Resolution; 300 dpi is standard for print publication |
+
+Always use 300 dpi when submitting to a journal or printing a poster.
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** What are the three required components of every ggplot2 figure?
+
+**2.** In `aes(x = gene, y = expression, colour = treatment)`, the `colour = treatment` mapping means:
+
+    a) All points will be coloured the same    b) Points will be coloured according to the values in the `treatment` column    c) The word "treatment" will appear in the colour legend    d) The colour is set to the value stored in the variable `treatment`
+
+**3.** You want separate histogram panels for each level of a variable called `tissue_type`. Which ggplot2 function creates these small multiples?
+
+**4.** What is the difference between `geom_bar()` and `geom_col()`?
+
+**5.** True or False: `ggsave("figure.pdf", dpi = 300)` will save the plot as a PDF at 300 dpi resolution.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** **Data**, **aesthetics** (`aes()`), and a **geom** (e.g., `geom_point()`). Data tells ggplot where to look; aesthetics map columns to visual properties; the geom determines the geometric shape used to represent the data.
+
+**2.** b) Points will be coloured according to the values in the `treatment` column — ggplot2 automatically assigns a different colour to each unique value in `treatment` and creates a legend. To set all points to one colour regardless of the data, you would write `colour = "blue"` **outside** the `aes()` call.
+
+**3.** `facet_wrap(~ tissue_type)` — this creates one panel per level of `tissue_type`. You can control the number of columns with `ncol` and allow axis scales to vary with `scales = "free"`.
+
+**4.** `geom_bar()` counts the number of rows for each x-value and plots that count. `geom_col()` uses a y-variable you provide directly (pre-computed values like means). For scientific figures with calculated summaries, always use `geom_col()`.
+
+**5.** **False (partially)** — it will save as a PDF, but `dpi` is only relevant for raster formats (PNG, JPEG). PDFs are vector graphics and scale infinitely regardless of dpi. For print publication, PDF or SVG are actually preferable because they remain sharp at any size.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 13 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Load ggplot2 with `library(ggplot2)`
+- [ ] Build a ggplot figure by combining `ggplot()`, `aes()`, and a geom
+- [ ] Create `geom_histogram()`, `geom_col()`, `geom_boxplot()`, and `geom_point()` plots
+- [ ] Map variables to colour, fill, shape, and size inside `aes()`
+- [ ] Set fixed aesthetic values (e.g., `fill = "blue"`) outside `aes()`
+- [ ] Add error bars with `geom_errorbar()`
+- [ ] Apply a theme with `theme_classic()` or `theme_bw()`
+- [ ] Create faceted plots with `facet_wrap()`
+- [ ] Save a plot to file with `ggsave()` at 300 dpi
+
+::: callout-tip
+## Bonus Challenge
+
+Using the `gene_expr` data frame, create a volcano-plot-style scatter plot with `expression` on the x-axis and `log2_fc` on the y-axis. Colour points red if `|log2_fc| > 1` and blue otherwise. Add a horizontal dashed line at y = 0 and vertical dashed lines at x = ±1. Apply `theme_classic()`. Save it as a 6 × 5 inch PNG.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Friday)
+
+- Friday (Lab 14): Contingency tables, mosaic plots, odds ratios, and chi-square tests
+- Read **R for Data Science Ch. 7–8** (if not done)
+- Have ggplot2 installed and working before class
+
+------------------------------------------------------------------------

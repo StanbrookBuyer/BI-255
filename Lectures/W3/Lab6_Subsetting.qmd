@@ -1,0 +1,405 @@
+---
+title: "Lab 6: Subsetting Vectors, Matrices & Data Frames"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "August 31, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Filtering NBA Data Like a Pro
+
+Imagine you're an NBA analyst and you have stats on every player in the league. You don't need all 450+ players at once — you need just the All-Stars, or just the players who average over 20 points, or just the centers on Western Conference teams.
+
+**Subsetting** is how you extract exactly the slice of data you need. It is one of the most important skills in data science.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Subset vectors using numeric indices `[ ]`
+2. Subset using logical conditions
+3. Use `which()` to find positions matching a condition
+4. Subset data frames by row, column, and condition
+5. Use `subset()` for readable filtering
+6. Understand negative indexing (removing elements)
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Subsetting Vectors
+
+### By Position (Numeric Index)
+
+```{r}
+# Top 10 NBA scorers' points per game (2025-26 season, simulated)
+top_scorers_ppg <- c(32.1, 29.8, 27.4, 26.9, 25.3,
+                     24.8, 23.7, 22.9, 21.4, 20.8)
+
+top_scorers_names <- c("Luka Doncic", "Jayson Tatum", "Giannis Antetokounmpo",
+                        "Stephen Curry", "LeBron James",
+                        "Kevin Durant", "Devin Booker", "Donovan Mitchell",
+                        "Ja Morant", "Joel Embiid")
+
+names(top_scorers_ppg) <- top_scorers_names
+top_scorers_ppg
+```
+
+```{r}
+# Who is the #1 scorer?
+top_scorers_ppg[1]
+```
+
+```{r}
+# Top 3 scorers
+top_scorers_ppg[1:3]
+```
+
+```{r}
+# 5th, 7th, and 9th scorers
+top_scorers_ppg[c(5, 7, 9)]
+```
+
+### Negative Indexing — Removing Elements
+
+```{r}
+# Everyone EXCEPT the first player
+top_scorers_ppg[-1]
+```
+
+```{r}
+# Remove the top 3 (show everyone else)
+top_scorers_ppg[-c(1, 2, 3)]
+```
+
+::: callout-tip
+## Negative Indexing
+Put a minus sign before an index to **exclude** that position. This is a quick way to drop specific elements without having to retype everything else.
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: Subsetting with Logical Conditions
+
+This is where subsetting gets really powerful. You can extract elements based on whether they meet a condition.
+
+```{r}
+# Which players average more than 25 PPG?
+top_scorers_ppg[top_scorers_ppg > 25]
+```
+
+```{r}
+# Which players average between 22 and 26 PPG?
+top_scorers_ppg[top_scorers_ppg >= 22 & top_scorers_ppg <= 26]
+```
+
+::: callout-note
+## How Logical Subsetting Works
+
+`top_scorers_ppg > 25` creates a logical vector:
+```
+TRUE TRUE TRUE TRUE FALSE FALSE FALSE FALSE FALSE FALSE
+```
+
+When you put that inside `[ ]`, R returns only the elements where the value is `TRUE`.
+
+This is one of the most important patterns in R — **you'll use it in almost every analysis.**
+:::
+
+```{r}
+# Using which() to get the positions of matching elements
+which(top_scorers_ppg > 25)
+```
+
+```{r}
+# Useful for getting names
+names(which(top_scorers_ppg > 25))
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Subsetting Data Frames
+
+Let's work with a fuller NBA dataset:
+
+```{r}
+# NBA player stats for a subset of the 2025-26 season
+nba <- data.frame(
+  player     = c("Luka Doncic", "Jayson Tatum", "Giannis Antetokounmpo",
+                  "Stephen Curry", "LeBron James", "Kevin Durant",
+                  "Devin Booker", "Donovan Mitchell", "Ja Morant",
+                  "Joel Embiid", "Nikola Jokic", "Shai Gilgeous-Alexander",
+                  "Tyrese Haliburton", "Anthony Edwards", "Bam Adebayo"),
+  team       = c("DAL", "BOS", "MIL", "GSW", "LAL", "PHX",
+                  "PHX", "CLE", "MEM", "PHI", "DEN", "OKC",
+                  "IND", "MIN", "MIA"),
+  conference = c("W", "E", "E", "W", "W", "W",
+                  "W", "E", "W", "E", "W", "W",
+                  "E", "W", "E"),
+  position   = c("PG", "SF", "PF", "PG", "SF", "SF",
+                  "SG", "SG", "PG", "C", "C", "SG",
+                  "PG", "SG", "C"),
+  ppg        = c(32.1, 29.8, 27.4, 26.9, 25.3, 24.8,
+                  23.7, 22.9, 21.4, 20.8, 26.4, 30.1,
+                  22.7, 25.9, 19.8),
+  rpg        = c(8.7, 8.1, 11.5, 4.3, 7.2, 6.8,
+                  4.2, 4.5, 5.9, 11.8, 12.4, 4.6,
+                  3.9, 5.3, 10.7),
+  apg        = c(9.1, 4.8, 5.7, 6.4, 8.3, 4.1,
+                  4.9, 4.2, 8.1, 3.4, 9.2, 6.3,
+                  10.8, 5.6, 3.5),
+  is_allstar = c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE,
+                  FALSE, TRUE, FALSE, TRUE, TRUE, TRUE,
+                  FALSE, TRUE, TRUE)
+)
+```
+
+### Subset by Row Index
+
+```{r}
+# First 3 players
+nba[1:3, ]
+```
+
+### Subset by Column
+
+```{r}
+# Just names and PPG
+nba[, c("player", "ppg")]
+```
+
+### Subset by Condition — Rows Matching a Criterion
+
+```{r}
+# All Western Conference players
+nba[nba$conference == "W", ]
+```
+
+```{r}
+# All-Stars only
+nba[nba$is_allstar == TRUE, c("player", "team", "ppg")]
+```
+
+```{r}
+# Players averaging over 25 PPG in the Eastern Conference
+nba[nba$ppg > 25 & nba$conference == "E", ]
+```
+
+### Using `subset()` — More Readable
+
+```{r}
+# subset() lets you skip the $ and write conditions more cleanly
+subset(nba, ppg > 25, select = c(player, team, ppg, conference))
+```
+
+```{r}
+# Centers (position == "C") with more than 10 rebounds per game
+subset(nba, position == "C" & rpg > 10)
+```
+
+::: callout-tip
+## `[ ]` vs `subset()` — Which Should You Use?
+Both work, but:
+- `subset()` is more **readable** — great when you're writing code others (me!) will see
+- `[ ]` is more **flexible** — required for some advanced operations
+- In the next unit, we'll learn `dplyr::filter()` which is even cleaner!
+
+For now, practice both. They produce the same result.
+:::
+
+------------------------------------------------------------------------
+
+## Part 4: Modifying Subsets
+
+You can also use subsetting to **change** specific values:
+
+```{r}
+# Suppose Joel Embiid's PPG needs to be corrected to 21.2
+nba$ppg[nba$player == "Joel Embiid"] <- 21.2
+
+# Verify the change
+nba[nba$player == "Joel Embiid", c("player", "ppg")]
+```
+
+```{r}
+# Update all Western Conference player records to add a "W" flag
+nba$west_flag <- nba$conference == "W"
+head(nba[, c("player", "conference", "west_flag")])
+```
+
+------------------------------------------------------------------------
+
+## Part 5: Subsetting Matrices
+
+```{r}
+# Create a stats matrix (PPG, RPG, APG for 5 players)
+stat_matrix <- matrix(
+  c(32.1, 8.7, 9.1,
+    29.8, 8.1, 4.8,
+    27.4, 11.5, 5.7,
+    26.9, 4.3, 6.4,
+    30.1, 4.6, 6.3),
+  nrow     = 5,
+  byrow    = TRUE
+)
+rownames(stat_matrix) <- c("Doncic", "Tatum", "Giannis", "Curry", "SGA")
+colnames(stat_matrix) <- c("PPG", "RPG", "APG")
+
+stat_matrix
+```
+
+```{r}
+# Row subsetting
+stat_matrix["Curry", ]
+```
+
+```{r}
+# Column subsetting
+stat_matrix[, "PPG"]
+```
+
+```{r}
+# Who has the highest PPG?
+rownames(stat_matrix)[which.max(stat_matrix[, "PPG"])]
+```
+
+------------------------------------------------------------------------
+
+## Part 6: Quick Summary Analysis
+
+Let's use subsetting to answer real questions about our NBA dataset:
+
+```{r}
+# Question 1: How many All-Stars are there?
+sum(nba$is_allstar)
+```
+
+```{r}
+# Question 2: What is the average PPG for All-Stars vs non-All-Stars?
+allstar_ppg     <- mean(nba$ppg[nba$is_allstar == TRUE])
+non_allstar_ppg <- mean(nba$ppg[nba$is_allstar == FALSE])
+
+cat("All-Star average PPG:    ", round(allstar_ppg, 1), "\n")
+cat("Non-All-Star average PPG:", round(non_allstar_ppg, 1), "\n")
+```
+
+```{r}
+# Question 3: Which conference has higher average PPG?
+east_ppg <- mean(nba$ppg[nba$conference == "E"])
+west_ppg <- mean(nba$ppg[nba$conference == "W"])
+
+cat("Eastern Conference avg PPG:", round(east_ppg, 1), "\n")
+cat("Western Conference avg PPG:", round(west_ppg, 1), "\n")
+```
+
+```{r}
+# Simple visualization: PPG by conference
+boxplot(ppg ~ conference, data = nba,
+        col  = c("#007AC1", "#C8102E"),   # NBA blue and red
+        xlab = "Conference",
+        ylab = "Points Per Game",
+        main = "PPG Distribution by NBA Conference\n(Selected Players, 2025–26)")
+```
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** You have a vector `x <- c(10, 20, 30, 40, 50)`. What does `x[3]` return?
+
+    a) `10`  &nbsp;&nbsp; b) `20`  &nbsp;&nbsp; c) `30`  &nbsp;&nbsp; d) `3`
+
+**2.** What does `x[-2]` return from the same vector?
+
+    a) `20`  &nbsp;&nbsp; b) `10 20 30 40 50`  &nbsp;&nbsp; c) `10 30 40 50`  &nbsp;&nbsp; d) An error
+
+**3.** You have a data frame `df` with a column `score`. Write the code to keep only rows where `score > 90`.
+
+**4.** What does `which(x > 25)` return for `x <- c(10, 20, 30, 40, 50)`?
+
+    a) `30 40 50`  &nbsp;&nbsp; b) `3 4 5`  &nbsp;&nbsp; c) `TRUE FALSE TRUE TRUE TRUE`  &nbsp;&nbsp; d) `FALSE FALSE TRUE TRUE TRUE`
+
+**5.** True or False: `subset(nba, ppg > 25)` and `nba[nba$ppg > 25, ]` produce the same result.
+
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** c) `30` — R uses 1-based indexing, so `x[1]` = 10, `x[2]` = 20, `x[3]` = 30.
+
+**2.** c) `10 30 40 50` — The minus sign **excludes** that position. `x[-2]` means "everything except the 2nd element," which removes 20.
+
+**3.** `df[df$score > 90, ]` — Note the comma and the empty column position (meaning "all columns"). You could also write `subset(df, score > 90)`.
+
+**4.** b) `3 4 5` — `which()` returns the **positions** (indices) where the condition is TRUE, not the values themselves. Positions 3, 4, and 5 contain values 30, 40, and 50.
+
+**5.** **True** — Both approaches filter rows to those where `ppg > 25`. `subset()` is just more readable. In Lab 9 we'll learn `filter()` from dplyr, which is even cleaner.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 6 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Select specific elements from a vector by position
+- [ ] Use negative indexing to exclude elements
+- [ ] Subset using a logical condition (e.g., `x[x > 10]`)
+- [ ] Use `which()` to find positions matching a condition
+- [ ] Subset a data frame by row and/or column
+- [ ] Filter a data frame using a condition on a column (`df[df$col > value, ]`)
+- [ ] Use `subset()` for readable filtering
+- [ ] Modify values in a subset
+
+::: callout-tip
+## Bonus Challenge
+Using the `nba` data frame, find all players whose assists per game (`apg`) is higher than their rebounds per game (`rpg`). Print their names, team, and both stats. Which position do most of these players play?
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Wednesday)
+
+- Read **Intro2r Ch. 3 §3.2–3.3**
+- Wednesday (Lab 7): Dates & Times, plus the apply family of functions
+- Remember: **Quiz 2 is this Friday (Sep 4)**
+
+::: callout-important
+## Quiz 2 Reminder
+Quiz 2 covers **Labs 3, 4, 5, and 6**:
+- Sequences (`seq()`, `rep()`, `:`)
+- Vectors and missing values (`NA`, `is.na()`, `na.rm`)
+- Data frames (creating, exploring, accessing)
+- Subsetting (`[ ]`, `subset()`, logical conditions)
+:::
+
+------------------------------------------------------------------------
+
+

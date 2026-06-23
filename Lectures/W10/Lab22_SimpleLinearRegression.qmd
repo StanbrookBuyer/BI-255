@@ -1,0 +1,326 @@
+---
+title: "Lab 22: Simple Linear Regression"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "October 19, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## From Correlation to Prediction
+
+Correlation tells you that two variables are related. **Regression** goes further: it describes the relationship with a mathematical equation, allowing you to predict one variable from another and to test whether the predictor explains a significant portion of the variation.
+
+Simple linear regression fits a straight line: **y = β₀ + β₁x + ε**
+
+- β₀ = intercept (value of y when x = 0)
+- β₁ = slope (change in y for a one-unit increase in x)
+- ε = residual error (what the model cannot explain)
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Fit a simple linear regression with `lm()` in R
+2. Interpret the slope, intercept, R², and F-test from `summary(lm())`
+3. Check regression assumptions with diagnostic plots
+4. Plot a regression line with 95% confidence and prediction bands
+5. Make predictions from a fitted model with `predict()`
+6. Describe the difference between a confidence interval and a prediction interval
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: The Bradford Protein Assay — A Classic Biological Calibration Curve
+
+The Bradford assay estimates protein concentration by measuring absorbance at 595 nm. A standard curve is produced by measuring known concentrations of BSA (bovine serum albumin) — this is a textbook linear regression problem in biochemistry.
+
+```{r}
+# BSA standard concentrations (ug/mL) and measured absorbance (A595)
+bsa_conc <- c(0, 50, 100, 150, 200, 250, 300, 350, 400)
+absorbance <- c(0.041, 0.189, 0.352, 0.508, 0.667, 0.821, 0.979, 1.128, 1.276) +
+              rnorm(9, 0, 0.018)
+
+# Always visualise first
+plot(bsa_conc, absorbance,
+     pch  = 16,
+     col  = "#2C5F8A",
+     cex  = 1.4,
+     xlab = "BSA Concentration (ug/mL)",
+     ylab = "Absorbance at 595 nm",
+     main = "Bradford Assay Standard Curve")
+```
+
+```{r}
+# Fit the regression model
+bradford_model <- lm(absorbance ~ bsa_conc)
+
+# Examine the full summary
+summary(bradford_model)
+```
+
+::: callout-important
+## Reading the `summary(lm())` Output
+
+**Coefficients table:**
+
+| Term | Estimate | Meaning |
+|------|----------|---------|
+| `(Intercept)` | β₀ | Expected absorbance when [BSA] = 0 (should be near 0 for blank) |
+| `bsa_conc` | β₁ | Increase in absorbance per 1 ug/mL increase in BSA |
+
+**Overall model fit:**
+
+| Statistic | Meaning |
+|-----------|---------|
+| `Multiple R-squared` | Proportion of variation in y explained by x |
+| `F-statistic, p-value` | Overall test: does x significantly predict y? (H₀: β₁ = 0) |
+| `Residual standard error` | Average distance of data points from the fitted line |
+
+An R² of 0.998 means 99.8% of the variation in absorbance is explained by BSA concentration — ideal for a calibration curve.
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: Plotting the Regression Line with Confidence Bands
+
+```{r}
+library(ggplot2)
+
+# Create a data frame for ggplot
+bradford_df <- data.frame(conc = bsa_conc, abs = absorbance)
+
+# New x values for smooth confidence band
+new_conc <- data.frame(bsa_conc = seq(0, 400, by = 5))
+
+# Confidence band (uncertainty in the mean prediction)
+ci_band <- predict(bradford_model, newdata = new_conc,
+                   interval = "confidence", level = 0.95)
+
+# Prediction band (uncertainty for a new single measurement)
+pi_band <- predict(bradford_model, newdata = new_conc,
+                   interval = "prediction", level = 0.95)
+
+band_df <- data.frame(new_conc,
+                       fit    = ci_band[, "fit"],
+                       ci_lo  = ci_band[, "lwr"],
+                       ci_hi  = ci_band[, "upr"],
+                       pi_lo  = pi_band[, "lwr"],
+                       pi_hi  = pi_band[, "upr"])
+
+ggplot(bradford_df, aes(x = conc, y = abs)) +
+  geom_ribbon(data = band_df, aes(x = bsa_conc, ymin = pi_lo, ymax = pi_hi),
+              fill = "#A8C4D9", alpha = 0.4, inherit.aes = FALSE) +
+  geom_ribbon(data = band_df, aes(x = bsa_conc, ymin = ci_lo, ymax = ci_hi),
+              fill = "#5B8DB8", alpha = 0.5, inherit.aes = FALSE) +
+  geom_line(data = band_df, aes(x = bsa_conc, y = fit),
+            colour = "#2C5F8A", linewidth = 1.2, inherit.aes = FALSE) +
+  geom_point(colour = "#2C5F8A", size = 3) +
+  annotate("text", x = 50, y = 1.2,
+           label = paste0("R² = ", round(summary(bradford_model)$r.squared, 4)),
+           hjust = 0, size = 4) +
+  labs(title    = "Bradford Assay Standard Curve",
+       subtitle = "Dark band = 95% CI for mean; light band = 95% PI for new observation",
+       x        = "BSA Concentration (ug/mL)",
+       y        = "Absorbance (595 nm)") +
+  theme_classic(base_size = 13)
+```
+
+::: callout-note
+## Confidence Interval vs Prediction Interval
+
+**Confidence interval (CI)**: the plausible range for the **mean** absorbance at a given concentration — gets narrower with more data.
+
+**Prediction interval (PI)**: the plausible range for the absorbance of a **single new observation** at that concentration — always wider than the CI because it incorporates measurement-to-measurement variability.
+
+When using a standard curve to estimate an unknown protein concentration, the prediction interval is more honest — you are predicting a single new measurement, not the average of many.
+:::
+
+------------------------------------------------------------------------
+
+## Part 3: Making Predictions
+
+```{r}
+# Three unknown samples were measured at these absorbances:
+unknown_abs <- c(0.55, 0.88, 1.10)
+
+# Invert the regression: concentration = (absorbance - intercept) / slope
+intercept <- coef(bradford_model)[1]
+slope     <- coef(bradford_model)[2]
+
+predicted_conc <- (unknown_abs - intercept) / slope
+cat("Predicted concentrations (ug/mL):\n")
+print(round(predicted_conc, 1))
+```
+
+```{r}
+# Or use predict() directly (predict absorbance from concentration)
+# For inverse prediction, you can also use the equation above
+# Let's confirm: what absorbance do we expect at 175 ug/mL?
+predict(bradford_model,
+        newdata  = data.frame(bsa_conc = 175),
+        interval = "prediction")
+```
+
+------------------------------------------------------------------------
+
+## Part 4: Checking Regression Assumptions
+
+Linear regression assumes:
+
+1. **Linearity** — the true relationship is linear
+2. **Independence** — observations are independent
+3. **Homoscedasticity** — residuals have constant variance
+4. **Normality of residuals** — residuals are approximately normally distributed
+
+```{r}
+par(mfrow = c(2, 2))
+plot(bradford_model)
+par(mfrow = c(1, 1))
+```
+
+::: callout-tip
+## Diagnosing the Four Plots
+
+| Plot | What to look for |
+|------|-----------------|
+| **Residuals vs Fitted** | Points scattered randomly around 0 — no pattern. Curved pattern = nonlinearity. Funnel = heteroscedasticity. |
+| **Normal QQ of residuals** | Points on the diagonal line — confirms normality of residuals. |
+| **Scale-Location** | Square root of standardised residuals vs fitted — flat line = constant variance. |
+| **Residuals vs Leverage** | Identifies influential points. Points outside Cook's distance lines have disproportionate influence on the slope. |
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: A Second Example — Allometric Scaling
+
+Allometric scaling describes how physiological variables scale with body mass. Basal metabolic rate (BMR) scales approximately with body mass raised to the power 0.75 — on a log-log scale, this becomes a straight line.
+
+```{r}
+set.seed(88)
+# Mammal body mass (kg) and BMR (kcal/day) — realistic scale range
+body_mass <- c(0.02, 0.05, 0.1, 0.5, 1, 3, 10, 20, 50, 100, 200, 500, 1000, 3000, 5000)
+bmr       <- 70 * (body_mass^0.75) * exp(rnorm(15, 0, 0.15))
+
+# Linear regression on log-log scale
+log_mass <- log10(body_mass)
+log_bmr  <- log10(bmr)
+
+allometry_model <- lm(log_bmr ~ log_mass)
+summary(allometry_model)
+```
+
+```{r}
+# The slope on log-log scale = the allometric exponent
+cat("Allometric exponent (slope on log-log scale):",
+    round(coef(allometry_model)[2], 3), "\n")
+cat("Expected from Kleiber's law: ~0.75\n")
+```
+
+```{r}
+plot(log_mass, log_bmr,
+     pch  = 16, col = "#2C5F8A", cex = 1.4,
+     xlab = "log₁₀ Body Mass (kg)",
+     ylab = "log₁₀ BMR (kcal/day)",
+     main = "Allometric Scaling of Basal Metabolic Rate")
+abline(allometry_model, col = "#C8102E", lwd = 2)
+legend("topleft",
+       legend = c(paste0("slope = ", round(coef(allometry_model)[2], 3)),
+                  paste0("R² = ", round(summary(allometry_model)$r.squared, 3))),
+       bty = "n")
+```
+
+::: callout-note
+## Log-Log Transformation in Allometry
+
+Many biological relationships follow **power laws**: y = a × x^b. On a log-log scale, this becomes log(y) = log(a) + b × log(x) — a straight line. The slope b is the allometric exponent, and the intercept log(a) gives the proportionality constant.
+
+This is why biologists often plot mass-related data on log-log axes — it linearises power-law relationships and makes regression analysis valid.
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** In the output of `summary(lm())`, the coefficient for the predictor has estimate = 0.0032 and p-value = 0.0001. What does this tell you?
+
+**2.** A regression model gives R² = 0.45. Which statement is correct?
+
+    a) 45% of observations are correctly predicted    b) The model explains 45% of the variance in y    c) The slope is 0.45    d) 45% of data points lie on the regression line
+
+**3.** You run a Bradford assay and get an absorbance of 0.72 for an unknown sample. Explain step by step how you would use a linear regression model to estimate the protein concentration.
+
+**4.** In a Residuals vs Fitted plot, the points form a U-shaped curve. What does this indicate and what should you do?
+
+**5.** True or False: A prediction interval for a new observation is always narrower than the confidence interval for the mean at the same x value.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** The slope is 0.0032, meaning that for each one-unit increase in x, y increases by 0.0032 on average. The p-value of 0.0001 means this slope is highly significantly different from zero — we reject H₀: β₁ = 0. The predictor x significantly explains variation in y. However, the biological importance depends on the units and context, not just statistical significance.
+
+**2.** b) The model explains 45% of the variance in y — R² (the coefficient of determination) is the proportion of variance in the response variable accounted for by the predictor. It does not mean 45% of predictions are "correct" (which has no clear meaning in regression) or that 45% of points lie on the line.
+
+**3.** Step 1: Identify the model intercept (β₀) and slope (β₁) from `coef(model)`. Step 2: Set up the equation: absorbance = β₀ + β₁ × concentration. Step 3: Solve for concentration: concentration = (absorbance − β₀) / β₁ = (0.72 − β₀) / β₁. Step 4: Check that 0.72 falls within the range of your standard curve (do not extrapolate beyond it).
+
+**4.** A U-shaped (curved) pattern in Residuals vs Fitted indicates **non-linearity** — the true relationship between x and y is not linear, even though you fitted a straight line. You should consider: (a) adding a quadratic term (x²) to the model, (b) log-transforming x or y, or (c) fitting a curve instead of a line. A linear model is not appropriate for these data.
+
+**5.** False — The prediction interval is always **wider** than the confidence interval. The CI quantifies uncertainty in the mean prediction; the PI additionally accounts for individual observation variability (the residual variance). At the same x value, PI = CI width plus the residual standard error contribution. A PI will always be broader.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 22 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Fit a linear regression with `lm(y ~ x)` and view the summary
+- [ ] Interpret the slope, intercept, R², and overall F-test p-value
+- [ ] Use `predict()` with `interval = "confidence"` and `interval = "prediction"`
+- [ ] Explain the difference between a CI and a PI for regression
+- [ ] Produce a scatter plot with a regression line and confidence/prediction bands in ggplot2
+- [ ] Interpret the four standard diagnostic plots (`plot(model)`)
+- [ ] Apply log-log regression for power-law relationships and interpret the slope
+
+::: callout-tip
+## Bonus Challenge
+
+The R built-in dataset `trees` contains girth, height, and volume for 31 black cherry trees. Fit a linear regression of `Volume` on `Girth`. Check all four diagnostic plots. Then try regressing log(Volume) on log(Girth) and compare R² and the diagnostic plots. Which model fits better? Write a two-sentence biological interpretation of the slope in each model.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Wednesday)
+
+- Wednesday (Lab 23): Contingency tests — chi-square goodness of fit and tests of independence for genetic and epidemiological data
+- Friday: **Quiz 6** — covers Labs 21–24 (correlation, regression, contingency tests, Hardy-Weinberg)
+
+------------------------------------------------------------------------

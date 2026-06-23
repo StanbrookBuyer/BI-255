@@ -1,0 +1,385 @@
+---
+title: "Lab 3: Generating Sequences of Numbers"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "August 24, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Sequences and the NBA
+
+An 82-game NBA season generates an enormous amount of data — game numbers, jersey numbers, player ages, season years. In R, you don't have to type every number by hand. R gives you powerful tools to **generate sequences automatically**.
+
+Today we'll learn three ways to create sequences: the `:` operator, `seq()`, and `rep()`.
+
+::: callout-note
+## Learning Objectives
+
+By the end of this lab you will be able to:
+
+1.  Use the `:` operator to create simple integer sequences
+2.  Use `seq()` to create flexible sequences with custom spacing
+3.  Use `rep()` to repeat values
+4.  Combine sequences with `c()`
+5.  Apply simple operations across an entire sequence at once
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: The `:` Operator — The Quick Sequence
+
+The colon `:` is the fastest way to make a sequence of whole numbers.
+
+```{r}
+# NBA games are numbered 1 through 82 in a regular season
+game_numbers <- 1:82
+game_numbers
+```
+
+```{r}
+# How many games are there?
+length(game_numbers)
+```
+
+```{r}
+# You can also go backwards
+countdown <- 10:1
+countdown
+```
+
+```{r}
+# Sequences don't have to start at 1
+jersey_numbers <- 23:32   # Numbers around LeBron James' famous #23
+jersey_numbers
+```
+
+::: callout-tip
+## When to Use `:`
+
+Use `:` when you need consecutive whole numbers (1, 2, 3, ...).
+
+It's great for: - Game numbers in a season - Row numbers in a dataset - Counting iterations
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: `seq()` — The Flexible Sequence
+
+When you need more control — different step sizes, specific endpoints, or a set number of values — use `seq()`.
+
+### `seq()` with a step size (`by =`)
+
+```{r}
+# Every 5th jersey number from 0 to 99 
+every_fifth <- seq(from = 0, to = 99, by = 5)
+every_fifth
+```
+
+```{r}
+# Quarter times in a basketball game (12-minute quarters)
+# Generate the minute marks at the end of each quarter
+quarter_ends <- seq(from = 12, to = 48, by = 12)
+quarter_ends
+```
+
+### `seq()` with a fixed number of values (`length.out =`)
+
+```{r}
+# Suppose we want exactly 10 evenly spaced points
+# between a player's rookie salary ($1M) and max salary ($50M)
+salary_steps <- seq(from = 1000000, to = 50000000, length.out = 10)
+salary_steps
+
+# Round to nearest dollar
+round(salary_steps, 0)
+```
+
+::: callout-note
+## `seq()` Arguments Summary
+
+| Argument     | Meaning                | Example           |
+|--------------|------------------------|-------------------|
+| `from`       | Starting value         | `from = 0`        |
+| `to`         | Ending value           | `to = 100`        |
+| `by`         | Step between values    | `by = 5`          |
+| `length.out` | Total number of values | `length.out = 10` |
+
+You use **either** `by` **or** `length.out` — not both.
+:::
+
+```{r}
+# NBA three-point line is 23.75 feet from the basket
+# How many attempts from 15 to 30 feet in 0.5-foot increments?
+distances <- seq(15, 30, by = 0.5)
+distances
+length(distances)
+```
+
+------------------------------------------------------------------------
+
+## Part 3: `rep()` — Repeating Values
+
+Sometimes you need to repeat the same value multiple times — like recording that a player played in 4 quarters, or that a team has 5 starters.
+
+```{r}
+# An NBA team has 5 starting players
+# Record the starting designation for each player
+starter_status <- rep("Starter", times = 5)
+starter_status
+```
+
+```{r}
+# A full roster has 15 players (5 starters + 10 bench)
+bench_status <- rep("Bench", times = 10)
+bench_status
+```
+
+```{r}
+# Repeat a sequence of values
+# 4 quarters, repeated for 3 overtime periods... wait, let's do it right:
+# Game periods: Q1, Q2, Q3, Q4
+quarters <- rep(1:4, times = 1)
+quarters
+```
+
+```{r}
+# What if each quarter is repeated to show multiple games?
+quarter_labels <- rep(1:4, times = 5)   # 5 games
+quarter_labels
+```
+
+### `rep()` with `each =`
+
+```{r}
+# 3 players, each listed twice (home game and away game)
+players <- rep(c("LeBron", "Curry", "Durant"), each = 2)
+players
+```
+
+::: callout-tip
+## `times` vs `each`
+
+- `rep(x, times = 3)` repeats the **whole thing** 3 times: `1 2 3 1 2 3 1 2 3`
+- `rep(x, each = 3)` repeats **each element** 3 times: `1 1 1 2 2 2 3 3 3`
+:::
+
+```{r}
+# Demonstrate the difference
+rep(1:3, times = 3)
+rep(1:3, each = 3)
+```
+
+------------------------------------------------------------------------
+
+## Part 4: Combining with `c()`
+
+`c()` stands for **combine** (or concatenate). It's how you stick multiple values or sequences together into one.
+
+```{r}
+# Stephen Curry's points per game in his last 8 games
+curry_points <- c(28, 32, 19, 41, 25, 30, 22, 38)
+curry_points
+```
+
+```{r}
+# You can combine sequences too
+first_half  <- 1:41
+second_half <- 42:82
+full_season <- c(first_half, second_half)
+length(full_season)
+```
+
+```{r}
+# Mix of types? R will convert everything to the most flexible type
+mixed <- c(10, 20, "thirty")
+mixed          # Notice the numbers got converted to text!
+class(mixed)
+```
+
+::: callout-warning
+## Type Coercion
+
+When you mix types in `c()`, R automatically converts everything to the most general type. Numbers become text if there's any text in the mix. This is called **type coercion** and can cause unexpected results. Keep your vectors to one type when possible.
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: Math Across a Whole Sequence
+
+One of R's superpowers: you can do math on **every element at once** without writing a loop.
+
+```{r}
+# LeBron James' points scored in 10 consecutive games
+lebron_points <- c(26, 30, 19, 35, 28, 22, 31, 27, 33, 25)
+
+# How many total points did he score?
+sum(lebron_points)
+```
+
+```{r}
+# What was his average?
+mean(lebron_points)
+```
+
+```{r}
+# Fantasy basketball often doubles points for star players
+# Multiply every value by 2 at once!
+fantasy_points <- lebron_points * 2
+fantasy_points
+```
+
+```{r}
+# Which games did he score 30 or more?
+lebron_points >= 30
+```
+
+```{r}
+# How many games did he score 30+?
+sum(lebron_points >= 30)   # TRUE counts as 1, FALSE as 0
+```
+
+::: callout-note
+## Vectorized Operations
+
+In R, most operations automatically apply to **every element** in a sequence. This is called **vectorization** and it's what makes R so efficient — no need to write loops for basic math.
+
+`lebron_points * 2` is equivalent to doing `26*2, 30*2, 19*2, ...` all at once.
+:::
+
+------------------------------------------------------------------------
+
+## Part 6: Practical Example — An NBA Season Simulator
+
+Let's put it all together. We'll build a simple season summary for the Golden State Warriors:
+
+```{r}
+# Game numbers for the full 82-game season
+games <- 1:82
+
+# Simulate points scored per game (we'll use real-ish averages)
+# For now, let's create a simple pattern using sequences
+# (In later labs we'll use real data!)
+
+# Warriors tend to score between 110 and 130 points
+# Let's create a realistic-looking sequence (not truly random yet)
+set.seed(42)   # Makes our "random" numbers reproducible
+warriors_points <- round(seq(110, 130, length.out = 82) +
+                        rep(c(-8, 5, -3, 10, -6, 8, -4), length.out = 82))
+
+# Season summary
+cat("=== Golden State Warriors Season Summary ===\n")
+cat("Total games:", length(games), "\n")
+cat("Average points per game:", round(mean(warriors_points), 1), "\n")
+cat("Highest scoring game:", max(warriors_points), "points\n")
+cat("Lowest scoring game:", min(warriors_points), "points\n")
+cat("Games scoring 120+:", sum(warriors_points >= 120), "\n")
+```
+
+```{r}
+# Simple plot of points across the season
+plot(games, warriors_points,
+     type = "l",
+     col  = "#1D428A",   # Warriors blue
+     lwd  = 2,
+     xlab = "Game Number",
+     ylab = "Points Scored",
+     main = "Golden State Warriors — Points Per Game\n2025–26 Season (simulated)")
+abline(h = mean(warriors_points), col = "#FFC72C", lwd = 2, lty = 2)
+legend("topright", legend = "Season Average", col = "#FFC72C", lty = 2, lwd = 2)
+```
+
+::: callout-tip
+## Your First Plot!
+
+Don't worry about understanding all the `plot()` arguments yet — we have a whole week dedicated to visualization. For now, just appreciate that R can draw a graph of your data in one function call.
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** What does `5:9` produce in R?
+
+    a) The number 59  &nbsp;&nbsp; b) `5 6 7 8 9`  &nbsp;&nbsp; c) `5 9`  &nbsp;&nbsp; d) An error
+
+**2.** Which `seq()` argument controls how many values are generated?
+
+    a) `from`  &nbsp;&nbsp; b) `to`  &nbsp;&nbsp; c) `by`  &nbsp;&nbsp; d) `length.out`
+
+**3.** What is the output of `rep(c(1, 2), times = 3)`?
+
+    a) `1 1 1 2 2 2`  &nbsp;&nbsp; b) `1 2 1 2 1 2`  &nbsp;&nbsp; c) `1 2 3 1 2 3`  &nbsp;&nbsp; d) `1 2`
+
+**4.** What does `length(1:82)` return?
+
+**5.** True or False: `sum(c(TRUE, FALSE, TRUE, TRUE))` returns `3`.
+
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** b) `5 6 7 8 9` — The `:` operator creates a sequence of consecutive integers from the first number to the second, inclusive.
+
+**2.** d) `length.out` — This argument specifies the exact number of evenly spaced values to generate between `from` and `to`.
+
+**3.** b) `1 2 1 2 1 2` — `times = 3` repeats the **whole vector** 3 times. If you wanted `1 1 1 2 2 2`, you would use `each = 3` instead.
+
+**4.** `82` — `1:82` creates a vector of 82 integers, and `length()` counts the number of elements.
+
+**5.** **True** — In R, `TRUE` is treated as `1` and `FALSE` as `0` in arithmetic. So `sum(TRUE, FALSE, TRUE, TRUE)` = 1 + 0 + 1 + 1 = `3`.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 3 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Create a sequence using `:`
+- [ ] Create a sequence using `seq()` with both `by =` and `length.out =`
+- [ ] Use `rep()` with both `times =` and `each =`
+- [ ] Combine values and sequences with `c()`
+- [ ] Apply math operations to a whole sequence at once
+- [ ] Use `sum()`, `mean()`, `min()`, `max()`, `length()` on a sequence
+
+::: callout-tip
+## Bonus Challenge
+
+Create a sequence representing your favorite NBA player's jersey numbers worn throughout their career (look it up!). Use `rep()` to show how many seasons they wore each number. Calculate how many total seasons are represented.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Wednesday)
+
+- Review `seq()`, `rep()`, and `c()` — write three examples of each in your notes
+- Read **Intro2r §2.4.1–2.4.5**
+- Wednesday (Lab 4) we build on this with **vectors and missing values**

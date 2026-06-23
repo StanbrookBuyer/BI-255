@@ -1,0 +1,107 @@
+---
+title: "BI 255: Biological Data Science"
+subtitle: "Bethune-Cookman University · Department of Biology · Fall 2026"
+format:
+  html:
+    toc: false
+---
+
+::: {.callout-note appearance="simple"}
+**Mon / Wed / Fri, 45 min** &nbsp;·&nbsp; **Posit Cloud & R** &nbsp;·&nbsp; **Sophomore level, no coding experience required**
+:::
+
+## About This Course
+
+::: {.about-grid}
+
+::: {.info-card}
+### Course Description
+An introduction to data science through the lens of biology and ecology. Students learn to collect, clean, visualise, and statistically analyse biological data using R, with no prior programming experience required. By the end of the semester, every student will have built a reproducible research poster in R.
+:::
+
+::: {.info-card}
+### What You Will Learn
+- Programming fundamentals in R on Posit Cloud
+- Data visualisation with ggplot2
+- Hypothesis testing and statistical inference
+- Regression, correlation, and model building
+- Species diversity and community ecology analysis
+- Spatial mapping and text analysis
+:::
+
+::: {.info-card}
+### Prerequisites
+High school algebra. No programming experience required. Students should be comfortable using a web browser and creating folders on a computer.
+:::
+
+::: {.info-card}
+### Grading
+- Weekly lab reports — 50%
+- Mid-semester quiz — 15%
+- Final research poster — 25%
+- Participation — 10%
+:::
+
+:::
+
+## Lab Materials
+
+Each lab is a self-contained Quarto document with worked examples, call-out boxes, and a knowledge check. Use the sidebar to browse all 34 labs by week — every page is fully reproducible in Posit Cloud.
+
+## Resources {#resources}
+
+::: {.resources-grid}
+
+::: {.resource-card}
+### Posit Cloud
+All coding is done in your browser — no software to install.
+
+[Open Posit Cloud](https://posit.cloud)
+:::
+
+::: {.resource-card}
+### R for Data Science
+Free online textbook by Hadley Wickham — an excellent companion reference.
+
+[Read Online](https://r4ds.hadley.nz)
+:::
+
+::: {.resource-card}
+### ggplot2 Cheatsheet
+RStudio's official quick-reference card for data visualisation in R.
+
+[Download PDF](https://posit.co/wp-content/uploads/2022/10/data-visualization-1.pdf)
+:::
+
+::: {.resource-card}
+### dplyr Cheatsheet
+Quick-reference for data wrangling operations in the tidyverse.
+
+[Download PDF](https://posit.co/wp-content/uploads/2022/10/data-transformation-1.pdf)
+:::
+
+::: {.resource-card}
+### BCU Library
+Access databases, journals, and research support from the Carl S. Swisher Library.
+
+[Library Portal](https://library.cookman.edu)
+:::
+
+:::
+
+## Instructor {#instructor}
+
+::: {.instructor-card}
+<div class="instructor-avatar">RS</div>
+
+### Dr. Rosie Stanbrook-Buyer
+Assistant Professor, Department of Biology & Ecology
+
+| | |
+|---|---|
+| **Email** | [rosy.stanbrook@gmail.com](mailto:rosy.stanbrook@gmail.com) |
+| **Office Hours** | By appointment — email to schedule |
+| **Posit Cloud** | Workspace link distributed in first lab |
+| **Response Time** | Within 48 hours on weekdays |
+
+:::

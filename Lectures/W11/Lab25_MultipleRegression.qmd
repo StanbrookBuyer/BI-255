@@ -1,0 +1,288 @@
+---
+title: "Lab 25: Multiple Regression & Model Diagnostics"
+subtitle: "BI 255 · Bethune-Cookman University · Fall 2026"
+author: "Dr. Rosie Stanbrook-Buyer"
+date: "October 26, 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-title: "In This Lab"
+    toc-depth: 3
+    number-sections: false
+    code-fold: false
+    code-tools: true
+    highlight-style: github
+    smooth-scroll: true
+    embed-resources: true
+callout-appearance: default
+execute:
+  warning: false
+  message: false
+  echo: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Beyond One Predictor
+
+In Lab 22 we fitted a line through data with a single predictor. In most biological systems, the response variable is influenced by multiple factors simultaneously. **Multiple regression** models this: it estimates the independent contribution of each predictor while controlling for the others.
+
+::: callout-note
+## Learning Objectives
+By the end of this lab you will be able to:
+
+1. Fit a multiple linear regression with `lm(y ~ x1 + x2 + x3)`
+2. Interpret partial regression coefficients (the meaning of "controlling for other predictors")
+3. Understand adjusted R² and why it differs from R²
+4. Compare competing models using AIC with `AIC()`
+5. Detect and respond to multicollinearity with `cor()` and VIF
+6. Check all regression assumptions with diagnostic plots
+:::
+
+------------------------------------------------------------------------
+
+## Part 1: Fitting a Multiple Regression
+
+**Biological context**: plant ecologists studying *Arabidopsis thaliana* want to predict leaf chlorophyll content from three easily-measured variables — leaf area (cm²), nitrogen content (%), and days of growth.
+
+```{r}
+set.seed(42)
+n <- 60
+
+# Predictors
+leaf_area <- rnorm(n, 8, 2.5)
+nitrogen  <- rnorm(n, 3.2, 0.8)
+days      <- runif(n, 14, 56)
+
+# Response: chlorophyll (SPAD units), influenced by all three
+chlorophyll <- 15 + 2.1 * leaf_area + 8.4 * nitrogen + 0.3 * days +
+               rnorm(n, 0, 4)
+
+arabidopsis <- data.frame(chlorophyll, leaf_area, nitrogen, days)
+
+head(arabidopsis)
+```
+
+```{r}
+# Fit multiple regression
+model_full <- lm(chlorophyll ~ leaf_area + nitrogen + days,
+                 data = arabidopsis)
+summary(model_full)
+```
+
+::: callout-important
+## Reading Multiple Regression Output
+
+**Coefficients table:**
+
+Each coefficient is a **partial regression coefficient** — the estimated change in y for a one-unit increase in that predictor, **holding all other predictors constant**.
+
+For example: the coefficient for `nitrogen` estimates how much chlorophyll changes per 1% increase in N, *at fixed leaf area and days of growth*.
+
+**Model fit:**
+
+- `Multiple R-squared`: proportion of variance in chlorophyll explained by all predictors together
+- `Adjusted R-squared`: penalises for the number of predictors (always ≤ R²). Use this to compare models with different numbers of predictors.
+- `F-statistic`: tests H₀ that all slopes are zero simultaneously (overall model significance)
+:::
+
+------------------------------------------------------------------------
+
+## Part 2: Comparing Models — Is Each Predictor Needed?
+
+```{r}
+# Is `days` a useful predictor, or is it noise?
+model_reduced <- lm(chlorophyll ~ leaf_area + nitrogen, data = arabidopsis)
+
+# Compare with ANOVA (nested model comparison)
+anova(model_reduced, model_full)
+```
+
+```{r}
+# AIC: lower = better model (balances fit vs complexity)
+AIC(model_reduced, model_full)
+```
+
+::: callout-note
+## AIC — Akaike Information Criterion
+
+AIC penalises model complexity: AIC = 2k − 2 × log-likelihood, where k = number of parameters.
+
+A difference in AIC (ΔAIC) of:
+- < 2: models are similarly supported — prefer the simpler one
+- 2–7: moderate evidence for the model with lower AIC
+- > 10: strong evidence for the model with lower AIC
+
+AIC does not give a p-value — it is a relative measure. You can only compare AIC between models fit to the **same dataset**.
+:::
+
+```{r}
+# Stepwise model selection using AIC (automated)
+library(MASS)
+model_step <- stepAIC(model_full, direction = "both", trace = FALSE)
+summary(model_step)
+```
+
+------------------------------------------------------------------------
+
+## Part 3: Multicollinearity
+
+If two predictors are highly correlated, the model cannot reliably separate their effects — a problem called **multicollinearity**. Coefficients become unstable and their standard errors inflate.
+
+```{r}
+# Check pairwise correlations among predictors
+cor(arabidopsis[, c("leaf_area", "nitrogen", "days")])
+```
+
+```{r}
+# Variance Inflation Factor (VIF) — formal multicollinearity measure
+# install.packages("car")
+library(car)
+vif(model_full)
+```
+
+::: callout-warning
+## Interpreting VIF
+
+VIF measures how much the variance of each coefficient is inflated by its correlation with other predictors.
+
+| VIF | Interpretation |
+|-----|---------------|
+| 1 | No multicollinearity |
+| 1–5 | Moderate — generally acceptable |
+| 5–10 | High — consider removing one correlated predictor |
+| > 10 | Severe — model is unreliable |
+
+If VIF is high: (1) remove one of the correlated predictors, (2) combine them into a composite score, or (3) use ridge regression.
+:::
+
+```{r}
+# Demonstrate multicollinearity problem with highly correlated predictors
+set.seed(7)
+x1   <- rnorm(50)
+x2   <- x1 + rnorm(50, 0, 0.2)   # x2 almost identical to x1
+y_mc <- 2 * x1 + rnorm(50)
+
+model_mc <- lm(y_mc ~ x1 + x2)
+summary(model_mc)
+
+cat("\nVIF:\n")
+vif(model_mc)
+```
+
+------------------------------------------------------------------------
+
+## Part 4: Regression Assumptions Revisited
+
+```{r}
+par(mfrow = c(2, 2))
+plot(model_full)
+par(mfrow = c(1, 1))
+```
+
+::: callout-tip
+## What to Look For
+
+**Residuals vs Fitted**: flat, randomly scattered around zero — no pattern. Curvature → missing non-linear terms. Funnel → heteroscedasticity.
+
+**Normal Q-Q**: residuals on the line → normality satisfied.
+
+**Scale-Location**: square root of |residuals| vs fitted — flat line confirms constant variance.
+
+**Residuals vs Leverage**: points with high leverage (far from centre of x-space) and large residuals are **influential** — they can pull the regression line disproportionately. Cook's distance > 0.5 warrants investigation.
+:::
+
+------------------------------------------------------------------------
+
+## Part 5: Categorical Predictors in Regression
+
+```{r}
+# Add a categorical predictor: growth condition (greenhouse vs field)
+arabidopsis$condition <- factor(rep(c("Greenhouse", "Field"), each = 30))
+arabidopsis$chlorophyll[arabidopsis$condition == "Field"] <-
+  arabidopsis$chlorophyll[arabidopsis$condition == "Field"] - 5
+
+# R automatically creates a dummy variable (0/1) for categorical predictors
+model_with_condition <- lm(chlorophyll ~ leaf_area + nitrogen + days + condition,
+                           data = arabidopsis)
+summary(model_with_condition)
+```
+
+::: callout-note
+## Categorical Predictors (Dummy Variables)
+
+R converts a categorical factor with k levels into k − 1 dummy variables (0 or 1). The omitted level becomes the **reference category**, and its coefficient is absorbed into the intercept.
+
+For a two-level factor (Greenhouse/Field), R creates one dummy: `conditionField = 1` if Field, 0 if Greenhouse. The coefficient for `conditionField` estimates the mean difference in chlorophyll between Field and Greenhouse plants, holding all other predictors constant.
+:::
+
+------------------------------------------------------------------------
+
+## 3-Minute Knowledge Check
+
+*Close your notes. Answer these on your own — you have 3 minutes. We'll go through the answers together after.*
+
+::: callout-caution
+## Knowledge Check Questions
+
+**1.** A multiple regression predicting plant height from soil pH and temperature gives the coefficient for soil pH as 3.2 (p = 0.01). What does this mean?
+
+**2.** A model with two predictors gives R² = 0.68 and adjusted R² = 0.65. Adding a third predictor changes these to R² = 0.69 and adjusted R² = 0.64. Should you keep the third predictor?
+
+    a) Yes — R² increased    b) No — adjusted R² decreased, indicating the predictor is not useful enough to justify the added complexity    c) Yes — the model is always better with more variables    d) Cannot tell without a p-value
+
+**3.** You fit a multiple regression and find VIF = 12 for two predictors. What does this mean and what should you do?
+
+**4.** In a Residuals vs Leverage plot, one point has very high leverage but a small residual. Is this point necessarily a problem?
+
+**5.** True or False: The intercept in a multiple regression is the predicted value of y when all predictor variables equal zero.
+:::
+
+::: {.callout-caution collapse="true"}
+## Answers (Only reveal if you have answered the above questions)
+
+**1.** Holding temperature constant, each one-unit increase in soil pH is associated with a 3.2 cm increase in plant height on average. The partial coefficient isolates the effect of pH while removing the influence of temperature. The p-value of 0.01 indicates this association is statistically significant.
+
+**2.** b) No — adjusted R² decreased from 0.65 to 0.64, meaning the third predictor does not explain enough additional variance to justify the extra parameter. Adjusted R² penalises for model complexity; a decrease signals the predictor adds noise rather than signal. AIC comparison would confirm this.
+
+**3.** VIF = 12 indicates **severe multicollinearity** — the two predictors are so highly correlated that the model cannot reliably estimate their separate effects. Standard errors of their coefficients are inflated, making them appear non-significant even if they truly matter. Solutions: (1) Remove one of the correlated predictors, (2) combine them into a single composite variable (e.g., by PCA), or (3) use regularised regression (ridge regression).
+
+**4.** High leverage with a small residual means the point is at an unusual x-value but the model fits it well — it lies far from the centre of the predictor space but happens to fall close to the regression line. This is not necessarily a problem in itself. A point becomes truly **influential** (harmful) only when it has both high leverage AND a large residual, pulling the regression line toward itself. Cook's distance captures this combination.
+
+**5.** True — the intercept (β₀) is the predicted value of y when every predictor variable in the model equals zero. Whether this is biologically meaningful depends on context: if x = 0 is impossible or outside the range of the data (e.g., body mass = 0), the intercept is a mathematical baseline rather than an interpretable quantity.
+:::
+
+------------------------------------------------------------------------
+
+## Lab 25 Checklist
+
+Before you leave, make sure you can:
+
+- [ ] Fit `lm(y ~ x1 + x2 + x3)` and interpret partial regression coefficients
+- [ ] Explain the difference between R² and adjusted R²
+- [ ] Compare models with `AIC()` and interpret ΔAIC
+- [ ] Use `cor()` to check for multicollinearity among predictors
+- [ ] Interpret VIF values and identify when multicollinearity is a concern
+- [ ] Run and interpret the four regression diagnostic plots
+- [ ] Add a categorical predictor to `lm()` and interpret the dummy variable coefficient
+
+::: callout-tip
+## Bonus Challenge
+
+Use the built-in R dataset `iris`. Fit three competing models predicting `Petal.Length`: (1) Sepal.Length alone, (2) Sepal.Length + Sepal.Width, (3) Sepal.Length + Sepal.Width + Species. Compare all three with AIC. Check VIF for model (2). Run diagnostic plots for model (3) and comment on whether the assumptions are met.
+:::
+
+------------------------------------------------------------------------
+
+## Before Next Class (Wednesday)
+
+- Wednesday (Lab 26): Measuring biodiversity in R — species richness, Shannon diversity, and Simpson's index using the vegan package
+- Read **R for Data Science Ch. 24–25**
+
+------------------------------------------------------------------------
