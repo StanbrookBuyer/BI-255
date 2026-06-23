@@ -7,7 +7,7 @@ format:
 ---
 
 ::: {.callout-note appearance="simple"}
-**Mon / Wed / Fri, 50 min** &nbsp;·&nbsp; **Posit Cloud & R** &nbsp;·&nbsp; **Sophomore level, no coding experience required**
+**Mon / Wed / Fri, 50 min** &nbsp;·&nbsp; **Posit Cloud & R** &nbsp;·&nbsp; **no coding experience required**
 :::
 
 ## About This Course
