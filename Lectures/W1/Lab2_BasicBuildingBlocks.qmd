@@ -30,18 +30,19 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Learning R with Taylor Swift
 
-Today we're going to learn the fundamental building blocks of R — variables, data types, and basic functions — using data from one of the best-selling music artists of all time: **Taylor Swift**.
+Today we're going to learn the fundamental building blocks of R — variables, data types, and basic functions — using data from one of the best-selling music artists of all time: **Taylor Swift** (probably not your favorite, or mine; but a good source of data).
 
 Her albums have sold hundreds of millions of copies, broken streaming records, and generated billions of dollars. That data is perfect for learning R.
 
 ::: callout-note
 ## Learning Objectives
+
 By the end of this lab you will be able to:
 
-1. Assign values to variables using `<-`
-2. Identify the three main data types: numeric, character, and logical
-3. Use built-in R functions like `print()`, `class()`, `nchar()`, and `paste()`
-4. Perform arithmetic and comparisons on variables
+1.  Assign values to variables using `<-`
+2.  Identify the three main data types: numeric, character, and logical
+3.  Use built-in R functions like `print()`, `class()`, `nchar()`, and `paste()`
+4.  Perform arithmetic and comparisons on variables
 :::
 
 ------------------------------------------------------------------------
@@ -70,13 +71,13 @@ eras_tour_revenue / 1000000  # Convert to millions
 
 ::: callout-tip
 ## ️ Naming Rules for Variables
+
 - Names can contain letters, numbers, `.` and `_`
 - Names **cannot** start with a number
 - R is **case-sensitive**: `MyVar` and `myvar` are different things
 - Use descriptive names: `album_sales` is better than `x`
 
- Good: `album_sales`, `tour_revenue_2024`, `track.count`
- Bad: `1album`, `my variable`, `x`
+Good: `album_sales`, `tour_revenue_2024`, `track.count` Bad: `1album`, `my variable`, `x`
 :::
 
 ### Your Turn
@@ -101,7 +102,7 @@ recent_albums
 Not all information is the same kind. R recognizes different **data types**. The three most important for you right now are:
 
 | Type | What it stores | Example |
-|------|---------------|---------|
+|------------------|---------------------------------|---------------------|
 | **numeric** | Numbers (with or without decimals) | `3.14`, `42`, `1000000` |
 | **character** | Text (always in quotes) | `"Taylor Swift"`, `"Folklore"` |
 | **logical** | TRUE or FALSE only | `TRUE`, `FALSE` |
@@ -128,6 +129,7 @@ class(is_grammy_winner)
 
 ::: callout-warning
 ## ️ Common Mistake: Forgetting Quotes
+
 If you type `Taylor Swift` without quotes, R thinks you're referring to two variables named `Taylor` and `Swift` — which don't exist! You'll get an error.
 
 Always wrap text in **double quotes** `" "` or **single quotes** `' '`.
@@ -181,14 +183,14 @@ formatC(total_fans, format = "d", big.mark = ",")
 ::: callout-note
 ## R Arithmetic Operators
 
-| Operator | Meaning | Example | Result |
-|----------|---------|---------|--------|
-| `+` | Addition | `5 + 3` | `8` |
-| `-` | Subtraction | `10 - 4` | `6` |
-| `*` | Multiplication | `6 * 7` | `42` |
-| `/` | Division | `20 / 4` | `5` |
-| `^` | Power | `2^10` | `1024` |
-| `%%` | Remainder | `17 %% 5` | `2` |
+| Operator | Meaning        | Example   | Result |
+|----------|----------------|-----------|--------|
+| `+`      | Addition       | `5 + 3`   | `8`    |
+| `-`      | Subtraction    | `10 - 4`  | `6`    |
+| `*`      | Multiplication | `6 * 7`   | `42`   |
+| `/`      | Division       | `20 / 4`  | `5`    |
+| `^`      | Power          | `2^10`    | `1024` |
+| `%%`     | Remainder      | `17 %% 5` | `2`    |
 :::
 
 ```{r}
@@ -239,11 +241,11 @@ paste0("Track_", 1:5)   # We'll learn about 1:5 properly in the next lab!
 
 ::: callout-tip
 ## `paste()` vs `paste0()`
+
 - `paste()` puts a **space** between items by default
 - `paste0()` puts **nothing** between items
 
-You can also change the separator in `paste()`:
-`paste("a", "b", "c", sep = "-")` gives `"a-b-c"`
+You can also change the separator in `paste()`: `paste("a", "b", "c", sep = "-")` gives `"a-b-c"`
 :::
 
 ------------------------------------------------------------------------
@@ -270,13 +272,13 @@ midnights_sales != fearless_sales   # Are they NOT equal?
 
 ::: callout-warning
 ## ️ `=` vs `==`
+
 This is one of the most common beginner mistakes in R!
 
 - `<-` or `=` — **assigns** a value to a variable
 - `==` — **tests** whether two things are equal (asks a question)
 
-`x <- 5`   → puts 5 into x
-`x == 5`   → asks "is x equal to 5?" and returns `TRUE` or `FALSE`
+`x <- 5` → puts 5 into x `x == 5` → asks "is x equal to 5?" and returns `TRUE` or `FALSE`
 :::
 
 ```{r}
@@ -321,9 +323,10 @@ round(mean_listeners, 1)   # Round to 1 decimal place
 
 ::: callout-tip
 ## Getting Help in R
+
 If you ever want to know what a function does or what arguments it takes, type `?` followed by the function name in the console:
 
-```r
+``` r
 ?round
 ?mean
 ?paste
@@ -361,6 +364,7 @@ cat("Is she a Grammy winner?", grammy_awards > 0, "\n")
 
 ::: callout-note
 ## What is `cat()`?
+
 `cat()` ("concatenate and print") is used to print formatted output. `\n` means "new line." It's great for making readable summaries.
 :::
 
@@ -375,20 +379,25 @@ cat("Is she a Grammy winner?", grammy_awards > 0, "\n")
 
 **1.** What does `class("Fearless")` return?
 
-    a) `"numeric"`  &nbsp;&nbsp; b) `"logical"`  &nbsp;&nbsp; c) `"character"`  &nbsp;&nbsp; d) `"text"`
+```         
+a) `"numeric"`  &nbsp;&nbsp; b) `"logical"`  &nbsp;&nbsp; c) `"character"`  &nbsp;&nbsp; d) `"text"`
+```
 
 **2.** What is the key difference between `=` and `==` in R?
 
 **3.** Taylor Swift has 14 Grammy Awards. Which line of code correctly stores this?
 
-    a) `grammys == 14`  &nbsp;&nbsp; b) `14 <- grammys`  &nbsp;&nbsp; c) `grammys <- 14`  &nbsp;&nbsp; d) `grammys = "14"`
+```         
+a) `grammys == 14`  &nbsp;&nbsp; b) `14 <- grammys`  &nbsp;&nbsp; c) `grammys <- 14`  &nbsp;&nbsp; d) `grammys = "14"`
+```
 
 **4.** What does `nchar("Midnights")` return?
 
-    a) `1`  &nbsp;&nbsp; b) `9`  &nbsp;&nbsp; c) `"Midnights"`  &nbsp;&nbsp; d) `"character"`
+```         
+a) `1`  &nbsp;&nbsp; b) `9`  &nbsp;&nbsp; c) `"Midnights"`  &nbsp;&nbsp; d) `"character"`
+```
 
 **5.** True or False: `is.numeric("42")` returns `TRUE`.
-
 :::
 
 ::: {.callout-caution collapse="true"}
@@ -421,6 +430,7 @@ Before you leave, make sure you can:
 
 ::: callout-tip
 ## Bonus Challenge
+
 Choose a different music artist. Create variables for their name, debut year, number of albums, and approximate total streams. Use `cat()` to print a formatted career summary. Add it to your Quarto document and render it!
 :::
 
@@ -434,11 +444,8 @@ Choose a different music artist. Create variables for their name, debut year, nu
 
 ::: callout-important
 ## Quiz 1 Reminder
-Quiz 1 is **in class this Friday (Aug 21)**. It will cover:
-- Basic R syntax and operators
-- Variable assignment
-- Data types (numeric, character, logical)
-- Simple functions (`class()`, `mean()`, `paste()`, etc.)
+
+Quiz 1 is **in class this Friday (Aug 21)**. It will cover: - Basic R syntax and operators - Variable assignment - Data types (numeric, character, logical) - Simple functions (`class()`, `mean()`, `paste()`, etc.)
 
 Review your notes and practice in the console!
 :::
