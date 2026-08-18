@@ -80,21 +80,6 @@ eras_tour_revenue / 1000000  # Convert to millions
 Good: `album_sales`, `tour_revenue_2024`, `track.count` Bad: `1album`, `my variable`, `x`
 :::
 
-### Your Turn
-
-```{r}
-# Fill in the blanks — Taylor Swift has released these studio albums:
-# Fearless (2008), Speak Now (2010), Red (2012), 1989 (2014),
-# Reputation (2017), Lover (2019), Folklore (2020), Evermore (2020),
-# Midnights (2022), The Tortured Poets Department (2024)
-
-number_of_studio_albums <- 10
-
-# How many albums did she release between 2020 and 2024?
-recent_albums <- 3   # Folklore, Evermore, Midnights (TTPD releases 2024)
-recent_albums
-```
-
 ------------------------------------------------------------------------
 
 ## Part 2: Data Types — What Kind of Information?
