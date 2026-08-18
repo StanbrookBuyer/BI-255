@@ -364,13 +364,13 @@ cat("Is she a Grammy winner?", grammy_awards > 0, "\n")
 
 **1.** What does `class("Fearless")` return?
 
-a) `"numeric"` &nbsp;&nbsp; b) `"logical"` &nbsp;&nbsp; c) `"character"` &nbsp;&nbsp; d) `"text"`
+a) `"numeric"`; b) `"logical"` ; c) `"character"` ; d) `"text"`
 
 **2.** What is the key difference between `=` and `==` in R?
 
 **3.** Taylor Swift has 14 Grammy Awards. Which line of code correctly stores this?
 
-a) `grammys == 14` &nbsp;&nbsp; b) `14 <- grammys` &nbsp;&nbsp; c) `grammys <- 14` &nbsp;&nbsp; d) `grammys = "14"`
+a) `grammys == 14` ; b) `14 <- grammys` ; c) `grammys <- 14` ; d) `grammys = "14"`
 
 **4.** What does `nchar("Midnights")` return?
 
@@ -419,7 +419,7 @@ Choose a different music artist. Create variables for their name, debut year, nu
 
 - Read **Intro2r §2.4.1–2.4.5, 3.1, 3.2, 7.2**
 - Review your notes from today — especially the difference between `=` and `==`
-- Remember: **Quiz 1 is this Friday** — it covers Labs 1 and 2 (if we did not finish all of the Lab I will add this content to your next Quiz)
+- Remember: **Quiz 1 is on Friday** — it covers Labs 1 and 2 (if we did not finish all of the Lab I will add this content to your next Quiz)
 
 ::: callout-important
 ## Quiz 1 Reminder
