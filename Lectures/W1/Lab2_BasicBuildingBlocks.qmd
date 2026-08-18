@@ -364,23 +364,17 @@ cat("Is she a Grammy winner?", grammy_awards > 0, "\n")
 
 **1.** What does `class("Fearless")` return?
 
-```         
-a) `"numeric"`  &nbsp;&nbsp; b) `"logical"`  &nbsp;&nbsp; c) `"character"`  &nbsp;&nbsp; d) `"text"`
-```
+a) `"numeric"` &nbsp;&nbsp; b) `"logical"` &nbsp;&nbsp; c) `"character"` &nbsp;&nbsp; d) `"text"`
 
 **2.** What is the key difference between `=` and `==` in R?
 
 **3.** Taylor Swift has 14 Grammy Awards. Which line of code correctly stores this?
 
-```         
-a) `grammys == 14`  &nbsp;&nbsp; b) `14 <- grammys`  &nbsp;&nbsp; c) `grammys <- 14`  &nbsp;&nbsp; d) `grammys = "14"`
-```
+a) `grammys == 14` &nbsp;&nbsp; b) `14 <- grammys` &nbsp;&nbsp; c) `grammys <- 14` &nbsp;&nbsp; d) `grammys = "14"`
 
 **4.** What does `nchar("Midnights")` return?
 
-```         
-a) `1`  &nbsp;&nbsp; b) `9`  &nbsp;&nbsp; c) `"Midnights"`  &nbsp;&nbsp; d) `"character"`
-```
+a) `1` &nbsp;&nbsp; b) `9` &nbsp;&nbsp; c) `"Midnights"` &nbsp;&nbsp; d) `"character"`
 
 **5.** True or False: `is.numeric("42")` returns `TRUE`.
 :::
