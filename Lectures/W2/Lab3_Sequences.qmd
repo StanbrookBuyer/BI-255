@@ -158,9 +158,8 @@ bench_status
 
 ```{r}
 # Repeat a sequence of values
-# 4 quarters, repeated for 3 overtime periods... wait, let's do it right:
-# Game periods: Q1, Q2, Q3, Q4
-quarters <- rep(1:4, times = 1)
+# Q1 through Q4, repeated across 3 games
+quarters <- rep(1:4, times = 3)
 quarters
 ```
 
