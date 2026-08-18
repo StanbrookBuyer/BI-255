@@ -98,7 +98,7 @@ Assistant Professor, Department of Integrated Environmental Science & Natural Sc
 | | |
 |---|---|
 | **Email** | [stanbrookr@cookman.edu](mailto:stanbrookr@cookman.edu) |
-| **Office Hours** | Use calendly to schedule |
+| **Office Hours** | Use my booking page to schedule, the link is on Canvas |
 | **Posit Cloud** | Workspace link distributed in first lab |
 | **Response Time** | Within 48 hours on weekdays |
 
